@@ -117,8 +117,8 @@ Audit trail. Excel has none, and "who moved this date" is the first question ask
 | `activity_id` | bigint unsigned | no | FK → `activities.id`, `ON DELETE CASCADE` |
 | `user_id` | bigint unsigned | no | FK → `users.id`, `ON DELETE RESTRICT` |
 | `field` | varchar(40) | no | `actual_date`, `offset_days`, `predecessor_id`, … |
-| `old_value` | varchar(255) | yes | |
-| `new_value` | varchar(255) | yes | |
+| `old_value` | text | yes | Text, not varchar: `notes` is text and is audited like any other field |
+| `new_value` | text | yes | |
 | `created_at` | timestamp | no | |
 
 Index on `(activity_id, created_at)`.
