@@ -197,25 +197,72 @@ progress, pace and the forecasts, all of which are computed at read time.
 
 ## Seed data
 
-Three scopes, 151 activities, from the workbooks in `docs/workbooks/`.
+Three scopes, 151 activities, imported by `WorkbookSeeder` from the workbooks in `docs/workbooks/`. The copies of
+Tower A and Overall Timeline inside `SV_B3.xlsx` are identical to their own files and are ignored.
 
-| Scope | Activities | Total planned days | Planned finish |
-| --- | --- | --- | --- |
-| Tower A | 52 | 853 | 2028-08-05 |
-| Tower B | 52 | 843 | 2028-07-26 |
-| Overall Timeline | 47 | 825 | 2028-07-08 |
+**Reproduce the workbook exactly, including its defects.** The chain is parsed from the formulas, never typed:
+column C gives `predecessor_id` and `offset_days`, column D gives `date_adjustment_days`. Where a name disagrees
+with its formula, the formula wins. Nothing is special-cased; the lists below are what the parser finds.
+
+The tables between the markers are generated from the parsed workbooks by `php artisan workbook:document`. Do not
+edit them by hand — `WorkbookDocumentTest` fails if they disagree with the workbooks.
+
+<!-- generated:seed-data:start — do not edit; run php artisan workbook:document -->
+
+| Scope | Source | Activities | Total planned days | Planned finish |
+| --- | --- | --- | --- | --- |
+| Tower A | `SV_A3.xlsx` | 52 | 853 | 2028-08-05 |
+| Tower B | `SV_B3.xlsx` | 52 | 843 | 2028-07-26 |
+| Overall Timeline | `SV_Overall3.xlsx` | 47 | 825 | 2028-07-08 |
 
 `projects.planned_start_date` = 2026-04-05 for all three.
 
-**Reproduce the workbook exactly, including its defects.** Where a name disagrees with its formula, the formula
-wins:
+### Durations where the name and the formula disagree
 
-- `MASONRY 30` → `offset_days = 0`
-- `ALL FINISHING WORK 90` → `offset_days = 60`
-- Tower A Diwali → `date_adjustment_days = 17`
-- Tower B Diwali → `date_adjustment_days = 12`
-- Overall fire work rows → `date_adjustment_days = 7`
-- all with `adjustment_reason = "carried from original sheet"`
+The duration written at the end of a description, compared with the offset its column C formula
+computes. The formula wins; the description is imported unchanged.
 
-After seeding, assert every computed `planned_date` equals the workbook cell. All 151. Any mismatch fails the
-build. That assertion is the migration's proof, and it is the last moment an error is cheap to find.
+| Scope | Row | Activity | Formula (C) | Named | Imported `offset_days` |
+| --- | --- | --- | --- | --- | --- |
+| Tower A | 7 | `2nd SLAB 20` | `=C5+20+20` | 20 | **40** |
+| Tower A | 24 | `MASONRY 30` | `=C23+30-30` | 30 | **0** |
+| Tower A | 27 | `PLUMBING AND WATERPROOFING 30` | `=C25+30+20` | 30 | **50** |
+| Tower A | 29 | `ALL FINISHING WORK 90` | `=C28+60` | 90 | **60** |
+| Tower A | 30 | `LIFT INSTALLATION 45` | `=C28+30` | 45 | **30** |
+| Tower A | 31 | `GROUND LEVEL PLASTER 20` | `=C25+20+20` | 20 | **40** |
+| Tower A | 36 | `INTERNAL PUTTY WORK 30` | `=C28+10` | 30 | **10** |
+| Tower A | 38 | `EXT. TEXTURE / COLOUR WORK 30` | `=C28+20` | 30 | **20** |
+| Tower A | 46 | `GROUND LEVEL PCC 10` | `=C28+15` | 10 | **15** |
+| Tower A | 50 | `FIRE NOC AND LIFT NOC 45` | `=C49+20+30` | 45 | **50** |
+| Tower B | 19 | `13th SLAB 20` | `=C18+30` | 20 | **30** |
+| Tower B | 24 | `MASONRY 30` | `=C23+30-30` | 30 | **0** |
+| Tower B | 27 | `PLUMBING AND WATERPROOFING 30` | `=C25+30+20` | 30 | **50** |
+| Tower B | 29 | `ALL FINISHING WORK 90` | `=C28+60` | 90 | **60** |
+| Tower B | 30 | `LIFT INSTALLATION 45` | `=C28+30` | 45 | **30** |
+| Tower B | 31 | `GROUND LEVEL PLASTER 20` | `=C25+20+20` | 20 | **40** |
+| Tower B | 36 | `INTERNAL PUTTY WORK 30` | `=C28+10` | 30 | **10** |
+| Tower B | 38 | `EXT. TEXTURE / COLOUR WORK 30` | `=C28+20` | 30 | **20** |
+| Tower B | 46 | `GROUND LEVEL PCC 10` | `=C28+15` | 10 | **15** |
+| Tower B | 50 | `FIRE NOC AND LIFT NOC 45` | `=C49+20+30` | 45 | **50** |
+| Overall Timeline | | *none* | | | |
+
+### Date adjustments
+
+Column D formulas that add days on top of `start + C`. Each is imported as `date_adjustment_days`
+with `adjustment_reason = "carried from original sheet"`. They move that row's
+`planned_date` only, never its `planned_day` or anything downstream.
+
+| Scope | Row | Activity | Formula (D) | `date_adjustment_days` |
+| --- | --- | --- | --- | --- |
+| Tower A | 6 | `DIWALI (08-11-2026) BREAK 20` | `=E$2+C6+17` | +17 |
+| Tower B | 8 | `DIWALI (08-11-2026) BREAK 20` | `=E$2+C8+12` | +12 |
+| Tower B | 17 | `HOLI (22-03-2027) BREAK 30` | `=E$2+C17+7` | +7 |
+| Overall Timeline | 26 | `FIRE RELATED WORK 30` | `=E$2+C26+7` | +7 |
+| Overall Timeline | 27 | `FIRE NOC AND LIFT NOC 45` | `=E$2+C27+7` | +7 |
+
+<!-- generated:seed-data:end -->
+
+After seeding, every computed `planned_date` is asserted equal to the workbook's own cached column D value, and
+every `planned_day` to column C. All 151. A single mismatch rolls the import back and fails the build
+(`WorkbookImportTest` re-runs the comparison). That assertion is the migration's proof, and it is the last moment
+an error is cheap to find.

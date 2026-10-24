@@ -137,8 +137,8 @@ These are defects in the client's file, not in the plan.
 
 | # | Finding | Where | Impact |
 | --- | --- | --- | --- |
-| 1 | Hidden date nudges | Tower A `D6 = start + C6 + 17`; Tower B `D8 = start + C8 + 12`; Overall `D26`, `D27` = `+ 7` | The day number and the date disagree. |
-| 2 | Duration in the name contradicts the formula | `ALL FINISHING WORK 90` computes `C28 + 60`; `MASONRY 30` computes `C23 + 30 - 30`, a net zero | Masonry currently takes no time at all. |
+| 1 | Hidden date nudges | Tower A `D6 = start + C6 + 17`; Tower B `D8 = start + C8 + 12` and `D17 = start + C17 + 7` (Holi); Overall `D26`, `D27` = `+ 7` | The day number and the date disagree. |
+| 2 | Duration in the name contradicts the formula | Tower A (10 rows) and Tower B (11 rows) only. E.g. `ALL FINISHING WORK 90` computes `C28 + 60`; `MASONRY 30` computes `C23 + 30 - 30`, a net zero; Tower B `13th SLAB 20` computes `C18 + 30`. Overall Timeline has none — its `MASONRY 30` is `+ 30` and `ALL FINISHING WORK 90` is `+ 90` | Masonry takes no time at all in either tower. |
 | 3 | Wrong sheet title | Tower A sheet in both files is titled `TOWER B - OVERALL PROJECT TIMELINE` | Cosmetic. |
 | 4 | Tower A duplicated across two files | `SV_A3.xlsx` and `SV_B3.xlsx` both hold it | Identical today. Nothing keeps them so. |
 | 5 | Unexplained second date | `F2 = 9 May 2026`, beside `START DT: 5 Apr 2026`, unlabelled | Possibly actual site start. Unknown. |
@@ -150,9 +150,13 @@ These are defects in the client's file, not in the plan.
 **Reproduce the workbook exactly, including these defects.** Where an activity's name disagrees with its
 formula, **the formula wins**:
 
-- `MASONRY 30` → offset **0** days
-- `ALL FINISHING WORK 90` → offset **60** days
+- in Tower A and Tower B, `MASONRY 30` → offset **0** days and `ALL FINISHING WORK 90` → offset **60** days;
+  in Overall Timeline they are 30 and 90, as named
+- Tower B `13th SLAB 20` → offset **30** days
 - the +17 / +12 / +7 nudges → carried into `date_adjustment_days` with reason `"carried from original sheet"`
+
+The complete per-scope list of every name-vs-formula mismatch and every nudge is in the Seed data section of
+`database-structure.md`. It is generated from the parsed workbooks, so treat it, not this summary, as the record.
 
 Do not correct, improve or tidy any of these. If a computed date does not match the workbook, the code is wrong,
 not the workbook.
