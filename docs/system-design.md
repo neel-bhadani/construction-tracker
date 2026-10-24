@@ -71,26 +71,33 @@ the tool is worth building.
 
 **Holiday breaks are activities.** `DIWALI (08-11-2026) BREAK 20`, `HOLI (22-03-2027) BREAK 30` and
 `OTHER FESTIVAL BREAKS 13` sit in the chain and consume days like any other row. They need a flag so they can be
-styled differently and excluded from "work completed", but they must stay in the chain.
+styled differently, but they must stay in the chain — and they count toward progress like any other row. The
+workbook's "planned work-days completed" is the furthest completed row's day number, breaks included.
 
 ---
 
 ## 3. Business logic to preserve exactly
 
-Every number below is computed, never stored. These are the client's definitions, taken from the formulas — not
-improved versions.
+Every number below is computed, never stored. These are the client's definitions, taken from the formulas in each
+scope's Chart and Lead Tracker sheets — not improved versions. The formulas are identical across all three scopes.
+`ScopeMetricsService` and `LeadProjectionService` implement them, and `WorkbookMetricsTest` compares every figure
+for all three scopes with Excel's cached values (2,204 figures, clock frozen at 2026-10-15, the date the
+workbooks were last calculated).
+
+"Day" is the planned day number (`planned_day`, column C). "Date" is the planned date (`planned_date`, column D),
+which includes any date adjustment.
 
 ### Scope status
 
-| Figure | Definition |
-| --- | --- |
-| Total planned days | `MAX(day)` across the scope |
-| Planned finish | `MAX(estimated_date)` |
-| Latest actual milestone | `MAX(actual_date)` |
-| Planned days completed | day number of the **furthest** activity that has an actual date |
-| Progress % | days completed ÷ total planned days |
-| Current lead | `estimated_date − actual_date` of the latest completed activity |
-| Days since last milestone | `today − latest actual` |
+| Figure | Cell | Definition |
+| --- | --- | --- |
+| Total planned days | C8 | `MAX(day)` across the scope |
+| Planned finish | C9 | `MAX(date)` |
+| Latest actual milestone | C10 | `MAX(actual_date)` |
+| Planned days completed | C11 | `MAX(day)` over every row with an actual date, **breaks included** |
+| Progress % | C12 | days completed ÷ total planned days |
+| Current lead | C13 | `date − actual` of the row whose actual equals the latest actual; if several share it, the first in row order (`MATCH`) |
+| Days since last milestone | C14 | `today − latest actual` |
 
 Note what progress is **not**: it is not a count of completed activities. It is the day-number of the furthest
 completed one, divided by the total. Progress therefore jumps in steps, and a single out-of-order entry
@@ -99,30 +106,55 @@ overstates it.
 ### Pace
 
 ```
-average pace = days completed / (latest actual - actual start)
-recent pace  = (days completed - days at previous milestone) / (latest actual - previous actual)
+average pace = days completed / (latest actual - actual start)                                  C17
+               = 1 when latest actual is not after actual start
+previous     = latest actual date strictly before the latest one                                C18
+days at prev = MAX(day) over rows whose actual is on or before previous                         C19
+recent pace  = (days completed - days at prev) / (latest actual - previous)                     C20
+               = average pace when there is no previous actual date
 ```
 
-Both are floored at 0.01. Above 1.00 means running ahead of plan. With only one actual recorded, recent pace
-falls back to average pace.
+Both are floored at 0.01. Above 1.00 means running ahead of plan. Actual start is the Chart sheet's C5, which
+equals the planned start in all three workbooks; the app uses `projects.actual_start_date`, falling back to
+`planned_start_date`.
+
+Recent pace can reach the floor but cannot go negative: days completed is a maximum over a superset of the rows
+counted at the previous milestone. It reaches 0 only when an out-of-order entry finishes the furthest row before
+the latest one.
 
 ### Three forecasts, shown side by side
 
 | Method | Formula | Meaning |
 | --- | --- | --- |
-| Average pace | `latest actual + (total − done) ÷ avg pace` | Whole-project trend continues |
-| Recent pace | `latest actual + (total − done) ÷ recent pace` | Last two milestones continue |
+| Average pace | `ROUND(latest actual + (total − done) ÷ avg pace)` | Whole-project trend continues |
+| Recent pace | `ROUND(latest actual + (total − done) ÷ recent pace)` | Last two milestones continue |
 | Hold current lead | `planned finish − current lead` | Today's lead is simply kept |
 
+`ROUND` is Excel's: half away from zero. Each forecast's ahead/delay figure is `planned finish − forecast`.
+
 Per-activity forecasts follow the same three methods: a completed activity shows its actual date; a pending one
-shows the projection.
+shows `ROUND(latest actual + MAX(0, day − done) ÷ pace)` for the two pace methods, and `date − current lead` for
+hold-lead. A pending row already overtaken by progress is forecast at the latest actual, not in the past.
+
+**The pace forecasts read the day; the hold-lead forecast reads the date.** So a date adjustment moves the
+hold-lead column and not the pace columns. On Tower A's Diwali row the two are 20 days apart where neighbouring
+rows are 1 and 4 apart: 17 of those days are the hidden nudge. This is finding 1 (section 4) surfacing a second
+time. Reproduced, not reconciled.
 
 ### Lead tracker
 
-Status per activity is three-valued: **Done** (has an actual date), **NEXT** (first row without one),
-**Pending** (the rest). The tracker applies the current lead to every pending activity, and offers a what-if
-override — type a different lead, see the finish date move. The quick-comparison table (−5, 0, 5, 7, 9, 12 days)
-is the same calculation repeated.
+Status per activity is three-valued: **Done** (has an actual date), **NEXT** (the first row without one in
+**row order** — `COUNTBLANK(E$4:E_row)=1`, not date order), **Pending** (the rest, including a blank row that sits
+after a later completed row). The tracker applies the current lead to every pending activity; a completed
+activity keeps its own achieved lead. A what-if lead replaces the current lead only when one is supplied: blank
+means use the current lead, and 0 is a lead like any other. The quick-comparison table (−5, 0, 5, 7, 9, 12 days)
+is `planned finish − lead` repeated.
+
+### Before the first actual date
+
+The workbook shows `#N/A` or meaningless dates for lead, pace and forecasts until an actual exists. The app
+reports them as null rather than inventing a value: progress is 0, the first row is NEXT, and the lead tracker
+forecasts only once a what-if lead is supplied.
 
 ### Charts
 

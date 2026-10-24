@@ -6,6 +6,7 @@ use App\Models\Project;
 use Database\Seeders\Workbook\ScheduleWorkbook;
 use Database\Seeders\WorkbookSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
@@ -225,7 +226,7 @@ class WorkbookImportTest extends TestCase
     }
 
     /**
-     * @return \Illuminate\Support\Collection<int, \stdClass>
+     * @return Collection<int, \stdClass>
      */
     private function activities(string $scope)
     {
