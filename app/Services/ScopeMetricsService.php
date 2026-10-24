@@ -6,7 +6,6 @@ use App\Data\ActivityMetrics;
 use App\Data\ScopeMetrics;
 use App\Models\Activity;
 use App\Models\Scope;
-use Carbon\CarbonImmutable;
 use DateTimeInterface;
 use Illuminate\Support\Collection;
 
@@ -27,7 +26,7 @@ class ScopeMetricsService
         $activities = $scope->activities()->orderBy('sort_order')->orderBy('id')->get();
         $start = ScheduleDays::toDay($project->actual_start_date ?? $project->planned_start_date);
 
-        return $this->calculate($activities, $start, ScheduleDays::toDay($today ?? CarbonImmutable::now()));
+        return $this->calculate($activities, $start, ScheduleDays::currentDay($today));
     }
 
     /**

@@ -9,6 +9,7 @@ use App\Models\Scope;
 use App\Services\LeadProjectionService;
 use App\Services\ScheduleRecalculator;
 use App\Services\ScopeMetricsService;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -207,6 +208,29 @@ class ScopeMetricsTest extends TestCase
         $this->assertSame([null, null], [$projection->appliedLead, $projection->forecastFinish]);
         $this->assertSame(['A' => 'NEXT', 'B' => 'Pending'], $this->statuses($projection));
         $this->assertSame('2026-05-03', $this->projection(2)->forecastFinish);
+    }
+
+    /**
+     * 01:00 on 15 Oct in Kolkata is still 14 Oct in UTC. "Today" is the Kolkata date, taken
+     * before it becomes a day number, so days since the 20 Sep milestone is 25, not 24.
+     */
+    public function test_days_since_milestone_counts_from_todays_date_in_kolkata_not_utc(): void
+    {
+        $this->activity('A', null, 10, actual: '2026-09-20');
+        $this->travelTo(CarbonImmutable::parse('2026-10-15 01:00', 'Asia/Kolkata'));
+
+        $this->assertSame('Asia/Kolkata', config('app.timezone'));
+        $this->assertSame('2026-10-14', now()->utc()->toDateString());
+        $this->assertSame(25, $this->metrics()->daysSinceLatestActual);
+    }
+
+    public function test_a_today_supplied_in_another_timezone_is_read_as_the_kolkata_date(): void
+    {
+        $this->activity('A', null, 10, actual: '2026-09-20');
+        $service = app(ScopeMetricsService::class);
+
+        $this->assertSame(25, $service->forScope($this->scope, CarbonImmutable::parse('2026-10-14 19:30', 'UTC'))->daysSinceLatestActual);
+        $this->assertSame(24, $service->forScope($this->scope, CarbonImmutable::parse('2026-10-14 18:29', 'UTC'))->daysSinceLatestActual);
     }
 
     public function test_scope_without_activities_is_not_an_error(): void

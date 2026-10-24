@@ -6,7 +6,8 @@ use Carbon\CarbonImmutable;
 use DateTimeInterface;
 
 /**
- * Dates as whole day numbers, the way the workbook does arithmetic on date serials.
+ * Dates as whole day numbers, the way the workbook does arithmetic on date serials. A date is
+ * read as the calendar date it carries; only "today" is an instant, so it goes through currentDay().
  */
 final class ScheduleDays
 {
@@ -15,6 +16,15 @@ final class ScheduleDays
         $date = $date instanceof DateTimeInterface ? $date->format('Y-m-d') : $date;
 
         return intdiv(CarbonImmutable::parse($date, 'UTC')->getTimestamp(), 86400);
+    }
+
+    /**
+     * Today's day number: the calendar date in the app timezone (Asia/Kolkata), taken before
+     * anything else. Converting first matters: at 01:00 in Kolkata it is still yesterday in UTC.
+     */
+    public static function currentDay(?DateTimeInterface $now = null): int
+    {
+        return self::toDay(CarbonImmutable::instance($now ?? CarbonImmutable::now())->setTimezone(config('app.timezone')));
     }
 
     public static function toDate(int $day): string
