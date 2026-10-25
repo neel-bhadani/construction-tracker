@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Data\SchedulePreview;
+use App\Http\Requests\Concerns\ValidatesActualDate;
 use App\Http\Requests\Concerns\ValidatesChain;
 use App\Models\Activity;
 use App\Models\Building;
@@ -11,11 +12,12 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
 
 /**
- * Adding or editing an activity in a building the account owns.
+ * Adding or editing an activity in a building the account owns: its name, where it comes in the
+ * chain, its planned date (stored as the offset), its actual date, the break flag and a note.
  */
 class ActivityRequest extends FormRequest
 {
-    use ValidatesChain;
+    use ValidatesActualDate, ValidatesChain;
 
     public ?SchedulePreview $preview = null;
 
@@ -35,8 +37,8 @@ class ActivityRequest extends FormRequest
         return [
             'description' => ['required', 'string', 'max:255'],
             ...$this->chainRules(),
-            'adjustment_reason' => ['nullable', 'string', 'max:255', 'required_unless:date_adjustment_days,0'],
             'is_break' => ['required', 'boolean'],
+            'actual_date' => [...$this->actualDateRules($this->building()), 'prohibited_if_accepted:is_break'],
             'notes' => ['nullable', 'string', 'max:5000'],
         ];
     }
@@ -47,8 +49,9 @@ class ActivityRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'description.required' => 'Enter the activity name.',
             ...$this->chainMessages(),
-            'adjustment_reason.required_unless' => 'Give a reason for the date adjustment. Hidden nudges are what this replaces.',
+            ...$this->actualDateMessages($this->building()),
         ];
     }
 
@@ -57,7 +60,12 @@ class ActivityRequest extends FormRequest
      */
     public function plan(): array
     {
-        return [...$this->safe()->only(['description', 'adjustment_reason', 'notes']), ...$this->chain(), 'is_break' => $this->boolean('is_break')];
+        return [
+            ...$this->safe()->only(['description', 'notes']),
+            ...$this->chain(),
+            'is_break' => $this->boolean('is_break'),
+            'actual_date' => $this->validated('actual_date'),
+        ];
     }
 
     protected function building(): Building

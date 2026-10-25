@@ -71,7 +71,7 @@ class SchedulePreviewTest extends TestCase
         $this->actingAs($this->owner())
             ->postJson("/buildings/{$this->towerA->id}/activities/preview", ['predecessor_id' => $handover->id, 'offset_days' => 14, 'date_adjustment_days' => 0])
             ->assertOk()
-            ->assertExactJson(['plannedDate' => '2028-08-19', 'changedCount' => 0, 'finishBefore' => '2028-08-05', 'finishAfter' => '2028-08-19']);
+            ->assertExactJson(['plannedDate' => '2028-08-19', 'changedCount' => 0, 'finishBefore' => '2028-08-05', 'finishAfter' => '2028-08-19', 'changed' => [], 'pushes' => null]);
     }
 
     /** A date adjustment moves the row's own date and nothing downstream. */

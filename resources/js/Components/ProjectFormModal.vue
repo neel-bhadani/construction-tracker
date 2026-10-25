@@ -5,7 +5,7 @@ import Modal from './Modal.vue'
 import FormField from './FormField.vue'
 
 /*
- | Editor and admin. The planned start is only the default for new buildings:
+ | The planned start is only the default for new buildings:
  | changing it moves no existing timeline.
  */
 const props = defineProps({

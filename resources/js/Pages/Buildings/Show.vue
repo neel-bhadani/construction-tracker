@@ -7,6 +7,7 @@ import ProgressChart from '@/Components/ProgressChart.vue'
 import RecordActualModal from '@/Components/RecordActualModal.vue'
 import ActivityFormModal from '@/Components/ActivityFormModal.vue'
 import ConfirmDialog from '@/Components/ConfirmDialog.vue'
+import RowMenu from '@/Components/RowMenu.vue'
 import BuildingDatesModal from '@/Components/BuildingDatesModal.vue'
 import { formatDate, signed, percent, leadWord } from '@/lib/format'
 
@@ -39,8 +40,6 @@ const rows = computed(() => {
   return props.metrics.activities.map(m => ({ ...m, ...projected[m.id], ...stored[m.id] }))
 })
 
-const options = computed(() => props.activities.map(a => ({ id: a.id, description: a.description })))
-
 const earliestActual = computed(() => props.metrics.actualStartDate)
 
 const lead = computed(() => props.metrics.currentLead)
@@ -50,7 +49,8 @@ const leadTone = computed(() => lead.value === null ? 'text-slate-900' : lead.va
 /* ---------------- modals ---------------- */
 
 const recording = ref(null)
-const editing = ref(null)        // a stored row, or {} for a new activity
+const editing = ref(null)        // a row, or {} for a new activity at the end
+const inserting = ref(null)      // the row a new activity goes below
 const deleting = ref(null)
 const deleteError = ref('')
 const deleteProcessing = ref(false)
@@ -71,6 +71,14 @@ const confirmDelete = () => {
 }
 
 const openDelete = row => { deleteError.value = ''; deleting.value = row }
+
+const closeForm = () => { editing.value = null; inserting.value = null }
+
+// the "⋯" menu; Actual and Edit are buttons of their own
+const menuItems = row => [
+  { label: 'Insert activity below', action: () => { inserting.value = row } },
+  { label: 'Delete', action: () => openDelete(row), danger: true },
+]
 </script>
 
 <template>
@@ -150,12 +158,16 @@ const openDelete = row => { deleteError.value = ''; deleting.value = row }
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in rows" :key="row.id" class="border-b border-slate-100 last:border-0"
+          <tr v-for="row in rows" :key="row.id" class="group border-b border-slate-100 last:border-0"
               :class="[
                 row.status === 'NEXT' ? 'bg-teal-50 ring-1 ring-inset ring-teal-300' : '',
                 row.is_break ? 'bg-[repeating-linear-gradient(135deg,#f8fafc,#f8fafc_8px,#f1f5f9_8px,#f1f5f9_16px)] text-slate-500' : '',
               ]">
-            <td class="px-4 py-2.5">
+            <td class="relative px-4 py-2.5">
+              <!-- on hover, a "+" on the line below this row inserts there -->
+              <button type="button" title="Insert activity below" :aria-label="`Insert activity below ${row.description}`"
+                      class="absolute -bottom-2.5 left-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-teal-700 text-xs font-bold leading-none text-white opacity-0 shadow transition-opacity focus:opacity-100 group-hover:opacity-100"
+                      @click="inserting = row">+</button>
               <span :class="row.is_break ? 'italic' : 'font-medium text-slate-900'">{{ row.description }}</span>
               <span v-if="row.is_break" class="ml-2 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-600">Break</span>
             </td>
@@ -173,9 +185,9 @@ const openDelete = row => { deleteError.value = ''; deleting.value = row }
             <td class="whitespace-nowrap px-3 py-2.5">{{ row.actualDate ? '' : formatDate(row.actualOrForecast) }}</td>
             <td class="whitespace-nowrap px-4 py-2 text-right">
               <div class="flex justify-end gap-1.5">
-                <button class="btn-xs" @click="recording = row">Actual</button>
+                <button v-if="!row.is_break" class="btn-xs" @click="recording = row">Actual</button>
                 <button class="btn-xs" @click="editing = row">Edit</button>
-                <button class="btn-xs hover:!border-rose-600 hover:!text-rose-700" @click="openDelete(row)">Delete</button>
+                <RowMenu :items="menuItems(row)" :label="`More for ${row.description}`" />
               </div>
             </td>
           </tr>
@@ -209,9 +221,9 @@ const openDelete = row => { deleteError.value = ''; deleting.value = row }
         </dl>
         <p v-if="row.date_adjustment_days" class="mt-2 text-xs text-amber-900">Adjusted: {{ row.adjustment_reason }}</p>
         <div class="mt-3 flex gap-2">
-          <button class="btn-ghost flex-1" @click="recording = row">Record actual</button>
-          <button class="btn-ghost" @click="editing = row">Edit</button>
-          <button class="btn-ghost" @click="openDelete(row)">Delete</button>
+          <button v-if="!row.is_break" class="btn-ghost flex-1" @click="recording = row">Record actual</button>
+          <button class="btn-ghost" :class="row.is_break ? 'flex-1' : ''" @click="editing = row">Edit</button>
+          <RowMenu :items="menuItems(row)" :label="`More for ${row.description}`" button-class="btn-ghost" />
         </div>
       </div>
     </div>
@@ -220,8 +232,8 @@ const openDelete = row => { deleteError.value = ''; deleting.value = row }
 
     <RecordActualModal :show="!!recording" :activity="recording" :today="today" :earliest="earliestActual"
                        @close="recording = null" />
-    <ActivityFormModal :show="!!editing" :building-id="building.id" :activity="editing?.id ? editing : null"
-                       :options="options" @close="editing = null" />
+    <ActivityFormModal :show="!!editing || !!inserting" :building="building" :activity="editing?.id ? editing : null"
+                       :insert-after="inserting" :rows="rows" :today="today" :earliest="earliestActual" @close="closeForm" />
     <ConfirmDialog :show="!!deleting" title="Delete activity" confirm-text="Delete"
                    :processing="deleteProcessing"
                    :message="deleteError || (deleting ? `Delete [${deleting.description}]? Its history is kept in the audit trail.` : '')"

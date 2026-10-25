@@ -49,9 +49,10 @@ class BuildingController extends Controller
             'projection' => $leads->project($buildingMetrics),
             // the progress chart; a page prop, so recording an actual redraws it with the rest
             'chart' => $charts->chart($building),
-            // the stored fields the edit form starts from; derived figures come from the services
+            // the stored fields the edit form starts from; derived figures come from the services.
+            // planned_day is what the dialog turns a typed planned date into an offset with.
             'activities' => $building->activities()->orderBy('sort_order')->orderBy('id')
-                ->get(['id', 'description', 'predecessor_id', 'offset_days', 'date_adjustment_days', 'adjustment_reason', 'is_break', 'notes']),
+                ->get(['id', 'description', 'predecessor_id', 'offset_days', 'date_adjustment_days', 'adjustment_reason', 'is_break', 'notes', 'planned_day']),
             'today' => ScheduleDays::toDate(ScheduleDays::currentDay(null, $project->timezone)),
         ]);
     }

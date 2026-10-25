@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Import\ScheduleWorkbook;
 use App\Models\Activity;
 use App\Models\ActivityRevision;
 use App\Models\Building;
@@ -104,16 +105,12 @@ class ScheduleEditingTest extends TestCase
         $this->actingAs($this->owner())->patch("/activities/{$slab->id}", $this->plan($slab, [
             'description' => '3rd SLAB 16',
             'offset_days' => 16,
-            'date_adjustment_days' => 2,
-            'adjustment_reason' => 'Crane booked late',
             'is_break' => true,
             'notes' => 'See site diary',
         ]))->assertSessionHasNoErrors();
 
         $this->assertEqualsCanonicalizing([
             ['offset_days', '15', '16', $this->owner()->id],
-            ['date_adjustment_days', '0', '2', $this->owner()->id],
-            ['adjustment_reason', null, 'Crane booked late', $this->owner()->id],
             ['description', '3rd SLAB 15', '3rd SLAB 16', $this->owner()->id],
             ['is_break', 'false', 'true', $this->owner()->id],
             ['notes', null, 'See site diary', $this->owner()->id],
@@ -129,17 +126,39 @@ class ScheduleEditingTest extends TestCase
         $this->assertSame(0, ActivityRevision::count());
     }
 
-    public function test_adjustment_needs_a_reason_and_a_zero_adjustment_drops_it(): void
+    /** The adjustment is no longer typed in: a save keeps it, whatever the request says about it. */
+    public function test_an_edit_keeps_the_adjustment_and_cannot_set_one(): void
     {
         $slab = $this->activity('3rd SLAB 15');
         $diwali = $this->activity('DIWALI (08-11-2026) BREAK 20');
 
-        $this->actingAs($this->owner())->patch("/activities/{$slab->id}", $this->plan($slab, ['date_adjustment_days' => 3, 'adjustment_reason' => '']))
-            ->assertSessionHasErrors('adjustment_reason');
+        $this->actingAs($this->owner())->patch("/activities/{$slab->id}", $this->plan($slab, ['date_adjustment_days' => 3, 'adjustment_reason' => 'Nudge']))
+            ->assertSessionHasNoErrors();
+        $this->assertSame([0, null], [$slab->fresh()->date_adjustment_days, $slab->fresh()->adjustment_reason]);
 
         $this->actingAs($this->owner())->patch("/activities/{$diwali->id}", $this->plan($diwali, ['date_adjustment_days' => 0]))
             ->assertSessionHasNoErrors();
-        $this->assertNull($diwali->fresh()->adjustment_reason);
+        $this->assertSame([17, ScheduleWorkbook::ADJUSTMENT_REASON], [$diwali->fresh()->date_adjustment_days, $diwali->fresh()->adjustment_reason]);
+        $this->assertSame(0, ActivityRevision::count());
+    }
+
+    /** "Clear" drops the adjustment and its reason; only that row's date moves, by the adjustment. */
+    public function test_clearing_an_adjustment_moves_only_that_row(): void
+    {
+        $diwali = $this->activity('DIWALI (08-11-2026) BREAK 20');
+        $before = $this->plannedDates(null);
+
+        $this->actingAs($this->owner())->patch("/activities/{$diwali->id}", $this->plan($diwali, ['clear_adjustment' => true]))
+            ->assertSessionHasNoErrors();
+
+        $after = $this->plannedDates(null);
+        $this->assertSame([0, null], [$diwali->fresh()->date_adjustment_days, $diwali->fresh()->adjustment_reason]);
+        $this->assertSame(CarbonImmutable::parse($before[$diwali->id])->subDays(17)->toDateString(), $after[$diwali->id]);
+        $this->assertSame(array_diff_key($before, [$diwali->id => 0]), array_diff_key($after, [$diwali->id => 0]));
+        $this->assertEqualsCanonicalizing([
+            ['date_adjustment_days', '17', '0', $this->owner()->id],
+            ['adjustment_reason', ScheduleWorkbook::ADJUSTMENT_REASON, null, $this->owner()->id],
+        ], $this->revisions($diwali));
     }
 
     public function test_predecessor_must_be_in_the_same_scope_and_not_itself(): void
@@ -150,7 +169,7 @@ class ScheduleEditingTest extends TestCase
         $this->actingAs($this->owner())->patch("/activities/{$slab->id}", $this->plan($slab, ['predecessor_id' => $towerB->id]))
             ->assertSessionHasErrors(['predecessor_id' => 'Choose an activity from this building.']);
         $this->actingAs($this->owner())->patch("/activities/{$slab->id}", $this->plan($slab, ['predecessor_id' => $slab->id]))
-            ->assertSessionHasErrors(['predecessor_id' => 'An activity cannot follow itself.']);
+            ->assertSessionHasErrors(['predecessor_id' => 'An activity cannot come after itself.']);
     }
 
     public function test_a_predecessor_that_would_create_a_cycle_is_refused_with_the_cycle_named_and_nothing_written(): void

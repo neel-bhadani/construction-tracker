@@ -24,7 +24,7 @@ class ActivityController extends Controller
 
     public function store(ActivityRequest $request, Building $building): RedirectResponse
     {
-        $activity = $this->editor->create($building, $request->plan(), $request->user());
+        $activity = $this->editor->create($building, $request->plan(), $request->user(), ...$request->insertion());
 
         return back()->with('success', "Added [{$activity->description}].");
     }
