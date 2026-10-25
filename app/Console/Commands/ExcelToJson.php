@@ -12,9 +12,10 @@ use Illuminate\Console\Command;
 use UnexpectedValueException;
 
 /**
- * Step 1 of the import: the client's workbooks to one JSON file, outside the repository
- * (storage/app/private is git-ignored). Read the floor guesses it prints, correct them in the JSON
- * if needed, then run step 2, `timeline:import-json`.
+ * Step 1 of the import: the client's workbooks to one JSON file, by default outside the repository
+ * (storage/app/private is git-ignored). The one exception is the live server's import file,
+ * --out=database/data/shaligram-vrundavan.json, which is committed. Read the floor guesses it prints,
+ * correct them in the JSON if needed, then run step 2, `timeline:import-json`.
  *
  * Everything is parsed from the formulas, never evaluated: planned dates and the `expected` figures
  * are Excel's own cached results, so step 2 can check its recalculation against them.

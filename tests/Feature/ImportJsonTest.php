@@ -224,10 +224,11 @@ class ImportJsonTest extends TestCase
     public function test_floors_are_guessed_from_names(): void
     {
         $this->assertSame(
-            [0, 0, 0, 1, 2, 12, 13, null, null, null, null],
+            [0, 0, 0, 0, 0, 1, 2, 12, 13, null, null, null, null, null],
             array_map(PlanDocument::guessLevel(...), [
-                'DAY 1 TO GF SLAB - 180 DAYS', 'GF SLAB', 'Ground floor slab', '1st SLAB', '2nd SLAB 20', '12th SLAB 15', '13TH SLAB',
-                'TERRACE-1 20', 'MASONRY 30', 'DIWALI (08-11-2026) BREAK 20', 'GROUND LEVEL PLASTER 20',
+                'DAY 1 TO GF SLAB - 180 DAYS', 'GF SLAB', 'Ground floor slab', 'GROUND FLOOR WATERPROOFING', 'Ground floor tiling 10',
+                '1st SLAB', '2nd SLAB 20', '12th SLAB 15', '13TH SLAB',
+                'TERRACE-1 20', 'MASONRY 30', 'DIWALI (08-11-2026) BREAK 20', 'GROUND LEVEL PLASTER 20', 'GROUNDFLOOR',
             ]),
         );
     }

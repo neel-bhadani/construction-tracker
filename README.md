@@ -59,8 +59,8 @@ Then import the client's project: see [Importing the client's workbooks](#import
    repository. It parses the formulas, never evaluates them, and stores Excel's own planned dates and Chart-sheet
    figures in the file. It refuses to overwrite a file that is there already (`--force` to do it anyway).
 
-3. **Check the floors.** The command prints, per tower, the floor it guessed for every activity: "GF SLAB" and
-   "DAY 1 TO GF SLAB" → Ground floor, "1st SLAB" … "13th SLAB" → that floor, everything else (and every break)
+3. **Check the floors.** The command prints, per tower, the floor it guessed for every activity: "GF SLAB",
+   "DAY 1 TO GF SLAB" and "GROUND FLOOR …" (not "GROUND LEVEL …") → Ground floor, "1st SLAB" … "13th SLAB" → that floor, everything else (and every break)
    → Whole building. The common-work timeline gets no floors. To correct one, change the activity's `"floor"` in
    the JSON and make sure the building's `"floors"` list has it.
 
@@ -74,6 +74,42 @@ Then import the client's project: see [Importing the client's workbooks](#import
    for that owner, and logs each import in `plan_imports`.
 
 The "Import from Excel" option when adding a building goes through the same checks.
+
+## Deploying to the live server
+
+The live server is Hostinger shared hosting: no Node, so the assets are built here and uploaded. `public/build/`
+is git-ignored; run `npm run build` locally and upload the whole folder to the server's `public/build/` with every
+frontend change, or it serves the old assets.
+
+The client's project goes in from `database/data/shaligram-vrundavan.json`, the only client data in the
+repository (it is private). It is made by `php artisan timeline:excel-to-json
+--out=database/data/shaligram-vrundavan.json --force`, never edited by hand, and dry-run locally before it is
+committed. The live `.env` needs `APP_TIMEZONE=Asia/Kolkata`, the file's timezone.
+
+First install, in the app folder on the server:
+
+```bash
+git pull
+composer install --no-dev --optimize-autoloader
+php artisan migrate --force
+php artisan user:create          # the client's name, email and password, typed on the server
+php artisan timeline:import-json database/data/shaligram-vrundavan.json --owner=<client email> --dry-run
+php artisan timeline:import-json database/data/shaligram-vrundavan.json --owner=<client email>
+php artisan optimize
+```
+
+Read the dry run before the real one: three buildings, "Planned dates equal to the file (Excel): 151 of 151" and
+every figure equal to `expected`.
+
+Running the import again is safe. The same file twice is refused (`plan_imports` holds its sha256 per owner), and so
+is a changed file while the owner has a project of that name; a failed run is one rolled-back transaction and
+writes nothing. **Never use `--as` on live**: it imports the file as a second project.
+
+A later deploy is `git pull`, `composer install --no-dev --optimize-autoloader`, `php artisan migrate --force`,
+`php artisan optimize`, plus the uploaded `public/build/`.
+
+**Never run on the live server:** `migrate:fresh`, `migrate:rollback`, `migrate:refresh`, `db:wipe`, `db:seed`,
+`php artisan test`, `npm run dev`.
 
 ## Accounts
 

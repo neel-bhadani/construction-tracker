@@ -72,12 +72,12 @@ final class PlanDocument
     }
 
     /**
-     * "GF SLAB" and "DAY 1 TO GF SLAB - 180 DAYS" are the ground floor, "1st SLAB" and "12th SLAB 15"
-     * that floor; anything else is the whole building's.
+     * "GF SLAB", "DAY 1 TO GF SLAB - 180 DAYS" and "GROUND FLOOR WATERPROOFING" are the ground floor,
+     * "1st SLAB" and "12th SLAB 15" that floor; anything else is the whole building's.
      */
     public static function guessLevel(string $name): ?int
     {
-        if (preg_match('/^(?:DAY\s*1\s+TO\s+)?(?:GF|GROUND(?:\s+FLOOR)?)\s+SLAB\b/i', trim($name))) {
+        if (preg_match('/^(?:(?:DAY\s*1\s+TO\s+)?(?:GF|GROUND)\s+SLAB|GROUND\s+FLOOR)\b/i', trim($name))) {
             return 0;
         }
 

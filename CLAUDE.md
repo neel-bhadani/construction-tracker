@@ -36,6 +36,9 @@ decisions: `docs/PLAN_V5.md`.
 
 - The client's workbooks live outside the repository, in `CLIENT_WORKBOOKS_DIR`. Never copy their data
   into code, seeders, tests or committed files. Tests use small hand-made data (`tests/Fixtures`).
+- The one exception: `database/data/shaligram-vrundavan.json`, the import file for the live server (the repo is
+  private). Regenerate it with `timeline:excel-to-json --out=database/data/shaligram-vrundavan.json --force`,
+  never by hand; no other client data in the repo.
 - The Excel oracle, the 151-row import proof and the chart oracle must keep passing.
 
 ## Working on a phase
