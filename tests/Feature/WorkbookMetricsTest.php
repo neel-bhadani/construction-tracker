@@ -6,7 +6,6 @@ use App\Data\BuildingMetrics;
 use App\Models\Building;
 use App\Services\BuildingMetricsService;
 use App\Services\LeadProjectionService;
-use Database\Seeders\WorkbookSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\WorkbookOracle;
@@ -28,7 +27,7 @@ class WorkbookMetricsTest extends TestCase
     {
         parent::setUp();
 
-        $this->seed(WorkbookSeeder::class);
+        $this->seedClientWorkbooks();
         $this->travelTo(self::CALCULATED_ON);
     }
 

@@ -3,11 +3,31 @@
 namespace Tests;
 
 use App\Import\ImportUploads;
+use App\Import\ScheduleWorkbook;
+use Database\Seeders\WorkbookSeeder;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use RuntimeException;
 
 abstract class TestCase extends BaseTestCase
 {
+    /**
+     * The client's workbooks are not in the repository. Tests that need them are skipped, not
+     * failed, where CLIENT_WORKBOOKS_DIR does not hold all three.
+     */
+    protected function requireClientWorkbooks(): void
+    {
+        if (! ScheduleWorkbook::available()) {
+            $this->markTestSkipped('The client workbooks are not in CLIENT_WORKBOOKS_DIR ('.ScheduleWorkbook::directory().').');
+        }
+    }
+
+    /** Import the client's project from its workbooks, or skip the test where they are missing. */
+    protected function seedClientWorkbooks(): void
+    {
+        $this->requireClientWorkbooks();
+        $this->seed(WorkbookSeeder::class);
+    }
+
     /**
      * RefreshDatabase wipes whatever it points at. A cached config or a typo
      * (construction_tracker_testing is someone else's database) must not reach it.

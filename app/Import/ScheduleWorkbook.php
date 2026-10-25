@@ -39,9 +39,22 @@ class ScheduleWorkbook
         public readonly array $activities,
     ) {}
 
+    /** The client's workbooks, outside the repository: CLIENT_WORKBOOKS_DIR. */
     public static function directory(): string
     {
-        return base_path('docs/workbooks');
+        return config('timeline.client_workbooks_dir');
+    }
+
+    /** Whether all three client workbooks are present. */
+    public static function available(): bool
+    {
+        foreach (self::SOURCES as $file) {
+            if (! is_readable(self::directory().'/'.$file)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /** One of the client's three workbooks, as the seeder imports it. */

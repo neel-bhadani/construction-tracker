@@ -22,8 +22,11 @@ php artisan db:seed --class=WorkbookSeeder          # Shaligram Vrundavan: Tower
 php artisan user:create-admin                        # the first admin; never through sign-up
 ```
 
-`WorkbookSeeder` parses the plan from the formulas in `docs/workbooks/` and refuses to finish unless every one of
+`WorkbookSeeder` parses the plan from the formulas in the client's workbooks and refuses to finish unless every one of
 the 151 computed dates equals the workbook's own cell.
+
+**The client's workbooks are never in the repository.** They are read from `CLIENT_WORKBOOKS_DIR`
+(default `~/client-files/building-timeline/references`), and `docs/workbooks/` and `*.xlsx` are git-ignored.
 
 ## Roles
 
@@ -43,7 +46,14 @@ Every endpoint is checked by a policy; buttons are only hidden to match.
 | --- | --- |
 | `/projects` | Home: every project with % done, most-behind building, expected handover |
 | `/projects/{id}` | One project: a card per building, add / edit / reorder / delete buildings |
-| `/projects/{id}/buildings/{id}` | The building's timeline: status, activity table, record actual, edit plan with a preview of what moves |
+| `/projects/{id}/buildings/{id}` | The building's timeline: status, the progress chart, activity table, record actual, edit plan with a preview of what moves |
+
+## Progress chart
+
+The building page's "Planned vs actual progress" chart is the client's Chart-sheet graph, computed on request by
+`BuildingChartService` from the same figures as the status row (nothing is stored). It also answers at
+`GET /projects/{id}/buildings/{id}/chart`. Drawn with Apache ECharts, pinned at 6.1.0 and loaded only on building
+pages.
 
 ## Settings worth knowing
 
@@ -55,12 +65,16 @@ Every endpoint is checked by a policy; buttons are only hidden to match.
 ## Tests
 
 ```bash
-php artisan test
+php artisan test   # PHP: services, endpoints, policies, the workbook oracles
+npm run test       # Vue: the progress chart (Vitest + jsdom, ECharts mocked)
 ```
 
-Tests run on MySQL against `construction_tracker_test` only; `tests/TestCase.php` refuses any other database,
+Copy `.env.testing.example` to `.env.testing` and fill in the database credentials: Laravel loads it instead of
+`.env` when testing. Tests run on MySQL against `construction_tracker_test` only; `tests/TestCase.php` refuses any other database,
 because `RefreshDatabase` wipes whatever it points at. The workbooks are the test oracle: the import proof and
-`WorkbookMetricsTest` compare every figure with Excel's cached values.
+`WorkbookMetricsTest` compare every figure with Excel's cached values, and `WorkbookChartTest` every point of the
+progress chart with the Calc sheets behind the client's Chart sheets. They are read from `CLIENT_WORKBOOKS_DIR`;
+where it does not hold all three, the tests that need them are skipped, not failed.
 
 `php artisan workbook:document` regenerates the seed-data section of `docs/database-structure.md`;
 `WorkbookDocumentTest` fails if it drifts from the workbooks.

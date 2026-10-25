@@ -10,7 +10,6 @@ use App\Models\User;
 use App\Services\BuildingMetricsService;
 use App\Services\LeadProjectionService;
 use App\Services\ProjectEditor;
-use Database\Seeders\WorkbookSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
@@ -29,7 +28,7 @@ class BuildingPageTest extends TestCase
         parent::setUp();
 
         $this->withoutVite();
-        $this->seed(WorkbookSeeder::class);
+        $this->seedClientWorkbooks();
         $this->travelTo('2026-10-15 12:00');
         $this->project = Project::sole();
     }

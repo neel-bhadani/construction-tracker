@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { Link, router, usePage } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import StatusChip from '@/Components/StatusChip.vue'
+import ProgressChart from '@/Components/ProgressChart.vue'
 import RecordActualModal from '@/Components/RecordActualModal.vue'
 import ActivityFormModal from '@/Components/ActivityFormModal.vue'
 import ConfirmDialog from '@/Components/ConfirmDialog.vue'
@@ -22,6 +23,7 @@ const props = defineProps({
   building: Object,
   metrics: Object,
   projection: Object,
+  chart: Object,
   activities: Array,
   today: String,
   can: Object,
@@ -131,6 +133,8 @@ const openDelete = row => { deleteError.value = ''; deleting.value = row }
         <div v-if="metrics.aheadHoldLead !== null" class="mt-0.5 text-xs text-slate-400">{{ signed(metrics.aheadHoldLead) }} days vs plan</div>
       </div>
     </section>
+
+    <ProgressChart :chart="chart" />
 
     <!-- desktop: the table -->
     <div class="card hidden overflow-x-auto md:block">

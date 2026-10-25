@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Import\ImportUploads;
+use App\Import\ScheduleWorkbook;
 use App\Models\Activity;
 use App\Models\ActivityRevision;
 use App\Models\Building;
@@ -10,7 +11,6 @@ use App\Models\BuildingRevision;
 use App\Models\Project;
 use App\Models\User;
 use Carbon\CarbonImmutable;
-use Database\Seeders\WorkbookSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -31,7 +31,7 @@ class BuildingsTest extends TestCase
         parent::setUp();
 
         $this->withoutVite();
-        $this->seed(WorkbookSeeder::class);
+        $this->seedClientWorkbooks();
         $this->travelTo('2026-10-15 12:00');
         $this->editor = User::factory()->editor()->create();
         $this->sv = Project::sole();
@@ -251,7 +251,7 @@ class BuildingsTest extends TestCase
     private function upload(string $workbook): array
     {
         $path = tempnam(sys_get_temp_dir(), 'plan').'.xlsx';
-        copy(base_path("docs/workbooks/{$workbook}"), $path);
+        copy(ScheduleWorkbook::directory()."/{$workbook}", $path);
 
         return $this->actingAs($this->editor)
             ->post('/imports', ['file' => new UploadedFile($path, $workbook, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true)], ['Accept' => 'application/json'])

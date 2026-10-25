@@ -26,3 +26,8 @@ Homestead.json
 Homestead.yaml
 Thumbs.db
 .claude/settings.local.json
+
+# Client workbooks: never in the repository. The oracle tests read them from CLIENT_WORKBOOKS_DIR.
+docs/workbooks/
+*.xlsx
+.env.testing
