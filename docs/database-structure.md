@@ -268,7 +268,7 @@ progress, pace and the forecasts, all of which are computed at read time.
 ## Seed data
 
 One project, Shaligram Vrundavan, with three buildings and 151 activities, imported by `WorkbookSeeder` from the
-workbooks in `docs/workbooks/`: Tower A and Tower B as `building`, Overall Timeline as `common_work`. The copies of
+client's workbooks (`CLIENT_WORKBOOKS_DIR`, never the repository): Tower A and Tower B as `building`, Overall Timeline as `common_work`. The copies of
 Tower A and Overall Timeline inside `SV_B3.xlsx` are identical to their own files and are ignored.
 
 **Reproduce the workbook exactly, including its defects.** The chain is parsed from the formulas, never typed:

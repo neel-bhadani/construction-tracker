@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\Role;
+use App\Import\ScheduleWorkbook;
 use App\Models\Building;
 use App\Models\Project;
 use App\Models\User;
@@ -141,8 +142,9 @@ class ProjectEndpointAuthorisationTest extends TestCase
 
     private function workbook(): UploadedFile
     {
+        $this->requireClientWorkbooks();
         $path = tempnam(sys_get_temp_dir(), 'plan').'.xlsx';
-        copy(base_path('docs/workbooks/SV_A3.xlsx'), $path);
+        copy(ScheduleWorkbook::directory().'/SV_A3.xlsx', $path);
 
         return new UploadedFile($path, 'SV_A3.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
     }

@@ -104,6 +104,49 @@ final class WorkbookOracle
         );
     }
 
+    /** The Calc sheet's column pairs, by the header in row 3. */
+    private const CALC_COLUMNS = [
+        'planned' => ['A', 'B', 'Planned date'],
+        'actual' => ['D', 'E', 'Actual date'],
+        'averagePace' => ['G', 'H', 'Avg-pace proj. date'],
+        'recentPace' => ['J', 'K', 'Recent-pace proj. date'],
+        'holdLead' => ['M', 'N', 'Hold-lead proj. date'],
+    ];
+
+    /**
+     * Excel's cached values in the scope's Calc sheet, the table behind its progress charts: one
+     * list of [date, fraction] per series, from row 4. The two pace projections are two rows; the
+     * others are one row more than there are activities.
+     *
+     * @return array<string, list<array{string, float}>>
+     */
+    public static function calc(string $scope): array
+    {
+        $prefix = self::PREFIXES[$scope];
+        $sheet = IOFactory::createReader('Xlsx')
+            ->load(ScheduleWorkbook::directory().'/'.ScheduleWorkbook::SOURCES[$scope])
+            ->getSheetByName("{$prefix} Calc");
+        $rows = count(ScheduleWorkbook::read($scope)->activities) + 1;
+        $series = [];
+
+        foreach (self::CALC_COLUMNS as $name => [$dateColumn, $fractionColumn, $header]) {
+            $actualHeader = trim((string) $sheet->getCell("{$dateColumn}3")->getValue());
+            if ($actualHeader !== $header) {
+                throw new UnexpectedValueException("{$prefix} Calc!{$dateColumn}3 is [{$actualHeader}], expected [{$header}].");
+            }
+
+            $length = in_array($name, ['averagePace', 'recentPace'], true) ? 2 : $rows;
+            for ($row = 4; $row < 4 + $length; $row++) {
+                $series[$name][] = [
+                    self::value($sheet, "{$dateColumn}{$row}", 'date'),
+                    (float) self::cached($sheet, "{$fractionColumn}{$row}"),
+                ];
+            }
+        }
+
+        return $series;
+    }
+
     /**
      * @param  array<string, array{string, string, string}>  $cells
      * @return array<string, mixed>

@@ -12,7 +12,8 @@ use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 /**
- * One-off import of the client's project and its three timelines from docs/workbooks: Tower A
+ * One-off import of the client's project and its three timelines from the client's workbooks
+ * (CLIENT_WORKBOOKS_DIR, never the repository): Tower A
  * and Tower B as buildings, Overall Timeline as the project's common work. The chain is parsed
  * from the formulas, then recalculated and compared row by row with the workbook's own cached
  * dates. A single mismatch rolls the whole import back.

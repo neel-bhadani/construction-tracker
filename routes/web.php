@@ -21,6 +21,7 @@ Route::middleware(['auth', 'approved'])->group(function () {
     Route::scopeBindings()->group(function () {
         Route::post('projects/{project}/buildings', [BuildingController::class, 'store'])->name('buildings.store');
         Route::get('projects/{project}/buildings/{building}', [BuildingController::class, 'show'])->name('buildings.show');
+        Route::get('projects/{project}/buildings/{building}/chart', [BuildingController::class, 'chart'])->name('buildings.chart');
         Route::patch('projects/{project}/buildings/{building}', [BuildingController::class, 'update'])->name('buildings.update');
         // admin only: moves every planned date in the building
         Route::patch('projects/{project}/buildings/{building}/dates', [BuildingController::class, 'dates'])->name('buildings.dates');

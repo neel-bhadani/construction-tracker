@@ -21,7 +21,7 @@ class WorkbookImportTest extends TestCase
     {
         parent::setUp();
 
-        $this->seed(WorkbookSeeder::class);
+        $this->seedClientWorkbooks();
     }
 
     /**

@@ -8,7 +8,6 @@ use App\Models\Building;
 use App\Models\BuildingRevision;
 use App\Models\User;
 use Carbon\CarbonImmutable;
-use Database\Seeders\WorkbookSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -31,7 +30,7 @@ class ScheduleEditingTest extends TestCase
     {
         parent::setUp();
 
-        $this->seed(WorkbookSeeder::class);
+        $this->seedClientWorkbooks();
         $this->travelTo(CarbonImmutable::parse('2026-10-15 12:00', 'Asia/Kolkata'));
         $this->admin = User::factory()->admin()->create();
         $this->editor = User::factory()->editor()->create();

@@ -489,3 +489,44 @@ Global, as before; not per project.
 
 A refusal says why in plain words, e.g. "Your role can view projects but not change them. Ask an editor or admin."
 
+---
+
+## 10. Progress chart
+
+The building page draws the client's Chart-sheet graph under the status row: "Planned vs actual progress".
+`BuildingChartService` computes it on request from `BuildingMetricsService` output; nothing is stored. Its `rows()`
+reproduce the workbook's Calc sheet (`TA Calc`, `TB Calc`, `OT Calc`) row for row, and `WorkbookChartTest` compares
+every one of them with Excel's cached values — 948 figures across the three buildings.
+
+### The series, as the Calc sheet defines them
+
+| Series | Calc | Points |
+| --- | --- | --- |
+| Planned | A/B | (planned start, 0%), then each planned date in date order — nudged dates included — at `MAX(day of rows planned on or before it) ÷ total days` |
+| Actual | D/E | (actual start, 0%), then one row per activity: the k-th actual date in date order, the latest once they run out; `MAX(day of rows finished on or before it) ÷ total` |
+| Average pace | G/H | (latest actual, progress) → (average-pace forecast, 100%) |
+| Recent pace | J/K | (latest actual, progress) → (recent-pace forecast, 100%) |
+| Hold current lead | M/N | (latest actual, progress), then per planned row `(MAX(planned date − lead, latest actual), MAX(planned %, progress))` |
+
+Breaks count, as everywhere else, so the actual line ends at the status row's progress. With no actual date, the
+Calc sheet repeats the actual start at 0% and the projections are `#N/A`; `rows()` keeps that, and the chart shows
+only the planned line and Today.
+
+### What the page draws
+
+- Consecutive identical points are merged, their activities listed together: the repeated rows of the actual and
+  hold-lead columns would otherwise stack thirty dots on one spot.
+- Lines and colours are the client's: Planned blue, solid; Actual green, solid and thicker; average pace orange
+  dashed; recent pace red dotted; hold lead purple dashed. Plus a Today line and a Planned finish line, which the
+  workbook does not have.
+- Tickboxes show and hide each line; average and recent pace start off, the rest on. A projection's label carries its
+  finish date, e.g. "Average pace – finish 3 Feb 2030", which matters when it ends beyond the axis.
+- **Full timeline**: planned start to the later of the planned finish and all three forecasts — ticked or not, so
+  the axis does not jump — plus a month, capped at a year after the planned finish; quarterly ticks.
+  **First 12 months**: planned start to twelve calendar months later, monthly ticks, 0–50% like the client's zoom
+  chart unless a visible point in that window is above 50%.
+- The tooltip gives the date, each visible line's percentage reached by then, and the activities whose points sit
+  on that date. It stays inside the chart and opens on a tap.
+- The chart is a page prop: recording or clearing an actual redraws it without a page load. ECharts (6.1.0, exact)
+  is a chunk of its own, fetched only on building pages. `npm run test` covers the switch, tickboxes and empty states.
+

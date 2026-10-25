@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Models\Activity;
 use App\Models\Building;
 use App\Models\User;
-use Database\Seeders\WorkbookSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -26,7 +25,7 @@ class SchedulePreviewTest extends TestCase
     {
         parent::setUp();
 
-        $this->seed(WorkbookSeeder::class);
+        $this->seedClientWorkbooks();
         $this->admin = User::factory()->admin()->create();
         $this->towerA = Building::where('name', 'Tower A')->sole();
     }

@@ -8,7 +8,6 @@ use App\Models\ProjectRevision;
 use App\Models\User;
 use App\Services\ProjectEditor;
 use App\Services\ProjectSummaryService;
-use Database\Seeders\WorkbookSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
@@ -24,7 +23,7 @@ class ProjectsTest extends TestCase
         parent::setUp();
 
         $this->withoutVite();
-        $this->seed(WorkbookSeeder::class);
+        $this->seedClientWorkbooks();
         $this->travelTo('2026-10-15 12:00');
         $this->editor = User::factory()->editor()->create();
     }

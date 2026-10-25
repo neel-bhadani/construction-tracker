@@ -9,11 +9,13 @@ use App\Import\ImportUploads;
 use App\Models\Activity;
 use App\Models\Building;
 use App\Models\Project;
+use App\Services\BuildingChartService;
 use App\Services\BuildingMetricsService;
 use App\Services\LeadProjectionService;
 use App\Services\ProjectEditor;
 use App\Services\ScheduleDays;
 use App\Services\ScheduleEditor;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -28,7 +30,7 @@ class BuildingController extends Controller
 {
     public function __construct(private readonly ProjectEditor $editor) {}
 
-    public function show(Request $request, Project $project, Building $building, BuildingMetricsService $metrics, LeadProjectionService $leads): Response
+    public function show(Request $request, Project $project, Building $building, BuildingMetricsService $metrics, LeadProjectionService $leads, BuildingChartService $charts): Response
     {
         Gate::authorize('view', $building);
 
@@ -47,6 +49,8 @@ class BuildingController extends Controller
             ],
             'metrics' => $buildingMetrics,
             'projection' => $leads->project($buildingMetrics),
+            // the progress chart; a page prop, so recording an actual redraws it with the rest
+            'chart' => $charts->chart($building),
             // the stored fields the edit form starts from; derived figures come from the services
             'activities' => $building->activities()->orderBy('sort_order')->orderBy('id')
                 ->get(['id', 'description', 'predecessor_id', 'offset_days', 'date_adjustment_days', 'adjustment_reason', 'is_break', 'notes']),
@@ -58,6 +62,14 @@ class BuildingController extends Controller
                 'updateBuildingDates' => $user->can('updateDates', $building),
             ],
         ]);
+    }
+
+    /** The progress chart's series on their own, for anything that needs them without the page. */
+    public function chart(Project $project, Building $building, BuildingChartService $charts): JsonResponse
+    {
+        Gate::authorize('view', $building);
+
+        return response()->json($charts->chart($building));
     }
 
     public function store(BuildingRequest $request, Project $project, ImportUploads $uploads): RedirectResponse
