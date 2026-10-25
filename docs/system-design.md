@@ -197,7 +197,7 @@ not the workbook.
 
 ## 5. Database design
 
-Five tables. The schedule is a graph, so the predecessor is a self-referencing key on `activities`.
+Five tables at first — `database-structure.md` is the current schema, and adds `project_revisions`. The schedule is a graph, so the predecessor is a self-referencing key on `activities`.
 
 ### projects
 

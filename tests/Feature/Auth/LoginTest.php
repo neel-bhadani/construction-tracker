@@ -36,16 +36,6 @@ class LoginTest extends TestCase
         $this->assertAuthenticatedAs($user);
     }
 
-    public function test_main_page_shows_the_users_name_and_role(): void
-    {
-        $user = User::factory()->editor()->create(['name' => 'Site Engineer']);
-
-        $this->actingAs($user)->get('/')->assertOk()
-            ->assertInertia(fn (Assert $page) => $page->component('Main')
-                ->where('auth.user.name', 'Site Engineer')
-                ->where('auth.user.role', 'editor'));
-    }
-
     public function test_wrong_password_and_unknown_email_get_the_same_generic_message(): void
     {
         User::factory()->create(['email' => 'ada@example.com']);

@@ -118,6 +118,7 @@ class ScheduleRecalculatorTest extends TestCase
         $exception = $this->recalculateExpectingCycle();
 
         $this->assertEqualsCanonicalizing([$a, $b, $c], $exception->activityIds);
+        $this->assertSame('Predecessor cycle: Alpha → Bravo → Charlie → Alpha', $exception->getMessage());
         foreach (['Alpha', 'Bravo', 'Charlie'] as $description) {
             $this->assertStringContainsString($description, $exception->getMessage());
         }

@@ -10,13 +10,14 @@ MySQL 8, InnoDB, `utf8mb4_unicode_ci`.
 
 ## Overview
 
-Five tables.
+Six tables, plus `users`.
 
 ```
 projects ──< scopes ──< activities ──< activity_revisions
-                            │                   │
-                            └── predecessor_id ─┘ (self-reference)
-                                                  users ──< activity_revisions
+   │                        │                   │
+   │                        └── predecessor_id ─┘ (self-reference)
+   └──< project_revisions                         users ──< activity_revisions
+                                                  users ──< project_revisions
 ```
 
 The schedule is a **directed acyclic graph**, not a list. `activities.predecessor_id` points at another activity
@@ -114,17 +115,43 @@ Audit trail. Excel has none, and "who moved this date" is the first question ask
 | Column | Type | Null | Notes |
 | --- | --- | --- | --- |
 | `id` | bigint unsigned, auto | no | PK |
-| `activity_id` | bigint unsigned | no | FK → `activities.id`, `ON DELETE CASCADE` |
+| `activity_id` | bigint unsigned | yes | FK → `activities.id`, `ON DELETE SET NULL`. Null once the activity is deleted |
+| `activity_snapshot_id` | bigint unsigned | no | The activity's id, written on every revision. No FK, never nulled: it is what tells two deleted activities' histories apart |
 | `user_id` | bigint unsigned | no | FK → `users.id`, `ON DELETE RESTRICT` |
-| `field` | varchar(40) | no | `actual_date`, `offset_days`, `predecessor_id`, … |
+| `field` | varchar(40) | no | `actual_date`, `notes`, `offset_days`, `predecessor_id`, …, or `created` / `deleted` |
 | `old_value` | text | yes | Text, not varchar: `notes` is text and is audited like any other field |
 | `new_value` | text | yes | |
 | `created_at` | timestamp | no | |
 
 Index on `(activity_id, created_at)`.
 
-Recorded for user-made changes only. Do not write a revision row for the cascade — a single duration change
-would otherwise produce fifty rows nobody reads.
+Recorded for user-made changes only, one row per changed field, written by `ScheduleEditor`. Do not write a
+revision row for the cascade — a single duration change would otherwise produce fifty rows nobody reads.
+`planned_day` and `planned_date` are never audited; they are derived.
+
+Revisions outlive their activity. An audit trail that vanished with the row would fail exactly when someone needs
+it, so `activity_id` is nulled on delete rather than cascading, and the deletion itself is recorded as a `deleted`
+revision whose `old_value` is the activity's description. `activity_snapshot_id` keeps the id after that, so the
+history of each deleted activity can still be traced on its own; `activity_id` stays for joins to live rows.
+
+---
+
+## project_revisions
+
+The same audit trail for the project's dates. Moving `planned_start_date` moves every planned date in the project —
+151 of them — so it is the most consequential change anyone can make, and the most traceable.
+
+| Column | Type | Null | Notes |
+| --- | --- | --- | --- |
+| `id` | bigint unsigned, auto | no | PK |
+| `project_id` | bigint unsigned | no | FK → `projects.id`, `ON DELETE CASCADE` |
+| `user_id` | bigint unsigned | no | FK → `users.id`, `ON DELETE RESTRICT` |
+| `field` | varchar(40) | no | `planned_start_date` or `actual_start_date` |
+| `old_value` | text | yes | |
+| `new_value` | text | yes | |
+| `created_at` | timestamp | no | |
+
+Index on `(project_id, created_at)`.
 
 ---
 

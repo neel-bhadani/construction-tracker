@@ -28,6 +28,7 @@ class ActivityRevisionTest extends TestCase
 
         $revision = ActivityRevision::create([
             'activity_id' => $activityId,
+            'activity_snapshot_id' => $activityId,
             'user_id' => User::factory()->editor()->create()->id,
             'field' => 'notes',
             'old_value' => $oldNote,

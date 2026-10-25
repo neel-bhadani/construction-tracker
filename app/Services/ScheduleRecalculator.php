@@ -5,7 +5,9 @@ namespace App\Services;
 use App\Exceptions\InvalidScheduleException;
 use App\Exceptions\ScheduleCycleException;
 use App\Models\Activity;
+use App\Models\Project;
 use App\Models\Scope;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -17,6 +19,9 @@ use Illuminate\Support\Facades\DB;
  */
 class ScheduleRecalculator
 {
+    /** The columns compute() reads. */
+    public const COLUMNS = ['id', 'description', 'predecessor_id', 'offset_days', 'date_adjustment_days', 'sort_order'];
+
     /**
      * @throws InvalidScheduleException when the graph cannot be computed; nothing is written.
      */
@@ -30,21 +35,45 @@ class ScheduleRecalculator
                 ->orderBy('sort_order')
                 ->orderBy('id')
                 ->lockForUpdate()
-                ->get(['id', 'description', 'predecessor_id', 'offset_days', 'date_adjustment_days', 'sort_order'])
+                ->get(self::COLUMNS)
                 ->keyBy('id');
 
-            $plannedDays = $this->plannedDays($activities);
-
-            $rows = $activities->map(fn (Activity $activity) => [
-                'id' => $activity->id,
-                'planned_day' => $plannedDays[$activity->id],
-                'planned_date' => $startDate->copy()
-                    ->addDays($plannedDays[$activity->id] + $activity->date_adjustment_days)
-                    ->toDateString(),
-            ]);
-
-            $this->bulkUpdate($rows);
+            $this->bulkUpdate(collect($this->compute($activities, $startDate)));
         });
+    }
+
+    /**
+     * Every scope of a project, in one transaction: a change to the project's start date moves
+     * every planned date in it.
+     */
+    public function recalculateProject(Project $project): void
+    {
+        DB::transaction(function () use ($project) {
+            $project->scopes()->orderBy('sort_order')->orderBy('id')->each(fn (Scope $scope) => $this->recalculate($scope));
+        });
+    }
+
+    /**
+     * The whole calculation, writing nothing: planned_day and planned_date for every activity in
+     * the collection. recalculate() writes the result; ScheduleEditor::preview() runs it on a
+     * proposed version of the graph that exists only in memory.
+     *
+     * @param  Collection<int, Activity>  $activities  keyed by id, in row order
+     * @return array<int, array{id: int, planned_day: int, planned_date: string}> keyed by id
+     *
+     * @throws InvalidScheduleException
+     */
+    public function compute(Collection $activities, CarbonInterface $startDate): array
+    {
+        $plannedDays = $this->plannedDays($activities);
+
+        return $activities->map(fn (Activity $activity) => [
+            'id' => $activity->id,
+            'planned_day' => $plannedDays[$activity->id],
+            'planned_date' => $startDate->copy()
+                ->addDays($plannedDays[$activity->id] + $activity->date_adjustment_days)
+                ->toDateString(),
+        ])->all();
     }
 
     /**
@@ -130,7 +159,10 @@ class ScheduleRecalculator
     private function inScheduleOrder(array $cycle, Collection $activities): array
     {
         $cycle = array_reverse($cycle);
-        $first = array_search($activities->only($cycle)->keys()->first(), $cycle, true);
+
+        // by position in the loaded rows; Eloquent's only() re-indexes, so it cannot say which comes first
+        $position = array_flip($activities->keys()->all());
+        $first = array_search(min(array_map(fn (int $id) => $position[$id], $cycle)), array_map(fn (int $id) => $position[$id], $cycle), true);
         $cycle = [...array_slice($cycle, $first), ...array_slice($cycle, 0, $first)];
 
         return array_map(fn (int $id) => [

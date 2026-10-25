@@ -38,4 +38,12 @@ class Project extends Model
     {
         return $this->hasManyThrough(Activity::class, Scope::class);
     }
+
+    /**
+     * @return HasMany<ProjectRevision, $this>
+     */
+    public function revisions(): HasMany
+    {
+        return $this->hasMany(ProjectRevision::class);
+    }
 }

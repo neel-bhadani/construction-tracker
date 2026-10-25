@@ -38,6 +38,8 @@ const roleLabel = computed(() => {
         </Link>
 
         <div v-if="user" class="ml-auto flex items-center gap-3">
+          <!-- page-level actions, e.g. the admin's pending-users button -->
+          <slot name="actions" />
           <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-700 text-xs font-semibold">
             {{ initials }}
           </div>
