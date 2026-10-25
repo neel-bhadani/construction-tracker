@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Enums\Role;
 use App\Models\Building;
 use App\Models\Project;
 use App\Models\User;
@@ -40,7 +39,7 @@ class BuildingChartTest extends TestCase
 
         $this->withoutVite();
         $this->travelTo('2026-10-15 12:00');
-        $this->project = Project::create(['name' => 'Hand-made', 'planned_start_date' => '2026-01-01']);
+        $this->project = Project::create(['owner_id' => $this->owner()->id, 'name' => 'Hand-made', 'planned_start_date' => '2026-01-01']);
         $this->building = Building::create(['project_id' => $this->project->id, 'name' => 'Block 1']);
 
         foreach ([['A', null, 10, 0], ['B', 'A', 20, 0], ['C', 'A', 5, 3], ['D', 'B', 10, 0]] as $order => [$name, $after, $offset, $adjustment]) {
@@ -185,31 +184,29 @@ class BuildingChartTest extends TestCase
 
     /* ---------------- endpoint and page ---------------- */
 
-    public function test_every_role_can_read_the_chart_and_it_is_the_services_output(): void
+    public function test_the_owner_reads_the_chart_and_it_is_the_services_output(): void
     {
         $url = "/projects/{$this->project->id}/buildings/{$this->building->id}/chart";
 
-        foreach (['viewer', 'editor', 'admin'] as $role) {
-            $this->actingAs(User::factory()->role(Role::from($role))->create())->getJson($url)
-                ->assertOk()
-                ->assertExactJson(json_decode(json_encode($this->chart()), true));
-        }
+        $this->actingAs($this->owner())->getJson($url)
+            ->assertOk()
+            ->assertExactJson(json_decode(json_encode($this->chart()), true));
     }
 
-    public function test_the_chart_endpoint_refuses_guests_the_unapproved_and_the_wrong_project(): void
+    public function test_the_chart_endpoint_refuses_guests_other_accounts_and_the_wrong_project(): void
     {
         $url = "/projects/{$this->project->id}/buildings/{$this->building->id}/chart";
-        $other = Project::create(['name' => 'Other', 'planned_start_date' => '2026-01-01']);
+        $other = Project::create(['owner_id' => $this->owner()->id, 'name' => 'Other', 'planned_start_date' => '2026-01-01']);
 
         $this->getJson($url)->assertUnauthorized();
-        $this->actingAs(User::factory()->unapproved()->create())->get($url)->assertRedirect('/login');
-        $this->actingAs(User::factory()->create())->getJson("/projects/{$other->id}/buildings/{$this->building->id}/chart")->assertNotFound();
+        $this->actingAs(User::factory()->create())->getJson($url)->assertNotFound();
+        $this->actingAs($this->owner())->getJson("/projects/{$other->id}/buildings/{$this->building->id}/chart")->assertNotFound();
     }
 
     /** The page carries the chart, so recording an actual — a normal Inertia visit — redraws it. */
     public function test_the_building_page_carries_the_chart_and_recording_an_actual_changes_it(): void
     {
-        $editor = User::factory()->editor()->create();
+        $editor = $this->owner();
         $page = "/projects/{$this->project->id}/buildings/{$this->building->id}";
 
         $this->actingAs($editor)->get($page)

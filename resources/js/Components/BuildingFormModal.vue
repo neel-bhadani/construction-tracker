@@ -6,8 +6,8 @@ import FormField from './FormField.vue'
 import { uploadFile } from '@/lib/http'
 
 /*
- | Editor and admin. A new building's plan starts empty, copied from any
- | building in any project, or imported from Excel. Copied and imported plans
+ | A new building's plan starts empty, copied from any building in one of
+ | your projects, or imported from Excel. Copied and imported plans
  | bring the chain and durations, never actual dates or notes; their dates are
  | computed from this building's own start. Editing changes the name and type
  | only — start dates are the admin's, on the timeline page.

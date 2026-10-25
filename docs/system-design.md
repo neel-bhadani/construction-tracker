@@ -261,7 +261,7 @@ An audit trail. Excel has none, and "who moved this date" is the first question 
 
 ### users
 
-Standard Laravel, plus `role` (`admin`, `editor`, `viewer`) and `approved_at` (nullable).
+Standard Laravel, plus an optional `phone`. There are no roles and no approval (section 11).
 
 ### Stored versus computed
 
@@ -320,12 +320,10 @@ simple enough to be obviously correct, and correctness is the entire value over 
 
 ### Authorisation
 
-- **viewer** — read everything, edit nothing.
-- **editor** — enter and change actual dates. This is the daily site job.
-- **admin** — everything, including durations, predecessors, adjustments, and the project start date.
-
-The split matters: changing an `offset_days` moves every downstream date. Site staff recording progress should
-not be able to reshape the plan by accident.
+One account, its own data. Each project has an owner (`projects.owner_id`); the owner can do everything with
+it, its buildings, floors and activities, and to every other account they do not exist: every policy answers
+404. `OwnershipTest` walks the route list and fails for a signed-in route without an ownership case. (Until
+v5 there were viewer, editor and admin roles; see section 11.)
 
 ### Security
 
@@ -335,10 +333,10 @@ changed what.
 
 ### Importing the workbook
 
-A one-off seeder, not an upload feature. Each activity's formula is read once into `predecessor_id` +
-`offset_days`, with the nudges going into `date_adjustment_days`. After import, assert that every computed
-`planned_date` matches the workbook cell exactly, and fail loudly on any mismatch. That assertion is the
-migration's proof.
+Each activity's formula is read once into `predecessor_id` + `offset_days`, with the nudges going into
+`date_adjustment_days`. After import, every computed `planned_date` must match the workbook cell exactly; any
+mismatch fails loudly. That assertion is the migration's proof. Since v5 the import is two commands, Excel →
+JSON → database (section 11); `WorkbookSeeder` remains for the test oracle.
 
 ---
 
@@ -353,9 +351,9 @@ Email and password, rate limited, with a forgotten-password flow. Nothing else.
 
 ### Registration
 
-Name, email, password. **New accounts are created inactive and need an admin to approve them.** Open
-registration on a page carrying a developer's live construction schedule and completion forecasts is a
-commercial data leak — anyone who finds the URL learns when the towers hand over.
+Name, email, password, at `/register`; the new account is signed in straight away. It sees only its own
+projects, so registering reveals nothing of anyone else's schedule. `REGISTRATION_OPEN=false` closes it
+(`/register` and the old `/signup` answer 404); `php artisan user:create` still adds an account.
 
 ### Main page
 
@@ -376,10 +374,10 @@ date was nudged shows that with its reason on hover.
 
 **Modals** — two:
 
-| Modal | Who | Fields |
-| --- | --- | --- |
-| Record actual date | editor, admin | Date, note |
-| Add / edit activity | admin only | Description, predecessor (dropdown of same-scope activities), offset days, adjustment + reason, break flag, notes |
+| Modal | Fields |
+| --- | --- |
+| Record actual date | Date, note |
+| Add / edit activity | Name, floor, comes after, planned date ⇄ days after, actual date, break, note (since v5; section 11) |
 
 The edit modal shows what will move before saving — "this changes 23 later dates; finish moves from 5 Aug to
 12 Aug" — and the save is refused with the cycle named if the chosen predecessor would create one.
@@ -399,7 +397,7 @@ Stop after each stage.
 3. **Import and prove it.** Seed all three scopes from the workbook, then assert every computed `planned_date`
    equals the workbook's cell. Any mismatch fails the build. Do not continue until all 151 activities match.
 4. **`BuildingMetricsService`.** Progress, pace, the three forecasts, current lead.
-5. **Auth.** Login, registration with approval, roles, policies.
+5. **Auth.** Login, registration, policies (roles and approval until v5).
 6. **Main page.** Status row, activity table, both modals, recalculation preview on save.
 7. **Charts and what-if.** S-curve with projections, zoom toggle, lead input.
 8. **Projects and buildings.** Many projects, many buildings each; the timeline screen and its calculations unchanged.
@@ -477,17 +475,9 @@ A new building's plan starts one of three ways:
 
 Every copied or imported activity gets a `created` revision naming its source.
 
-### Roles
+### Access
 
-Global, as before; not per project.
-
-| Role | Projects and buildings |
-| --- | --- |
-| viewer | Read everything |
-| editor | Add, edit and delete projects; add buildings (empty, copied, imported); rename, retype, reorder and delete buildings |
-| admin | All of that, and change an existing building's start dates — they move every planned date in it, the same line as offsets and predecessors |
-
-A refusal says why in plain words, e.g. "Your role can view projects but not change them. Ask an editor or admin."
+The owner of a project manages it all, start dates included; anyone else gets a 404 (section 11).
 
 ---
 
@@ -529,4 +519,45 @@ only the planned line and Today.
   on that date. It stays inside the chart and opens on a tap.
 - The chart is a page prop: recording or clearing an actual redraws it without a page load. ECharts (6.1.0, exact)
   is a chunk of its own, fetched only on building pages. `npm run test` covers the switch, tickboxes and empty states.
+
+---
+
+## 11. Version 5: one user, as simple as the Excel
+
+The plan and its decisions are in [`PLAN_V5.md`](PLAN_V5.md). In short:
+
+### Accounts and access
+
+- One real user, the client. No roles, approval, sharing or invites.
+- `/register` signs the new account in. `REGISTRATION_OPEN` (default `true`) closes it.
+- `projects.owner_id`: every query and policy checks it; another account's data is a 404 on every page and API
+  route. Project names are unique per owner.
+- My profile: name, email, phone, and a password change that signs out every other session.
+- `user:create` adds an account from the command line; `project:transfer {id} {email}` hands a project over.
+
+### Activity dialog
+
+Name, floor, comes after, planned date next to "N days after", actual date, break, note. The planned date is
+typed; the offset (what the workbook stores) follows. An adjustment is no longer typed in: it is shown
+read-only with a Clear link. "Insert activity below" places a new row under another and, with "push",
+relinks the row below so everything after it moves later. Actual dates never move.
+
+### Floors and progress
+
+Optional `floors` per building; `activities.floor_id` null is the whole building. `ProgressService` gives
+three levels in work-days: building (the workbook's figure, unchanged), floor (work-days of done activities ÷
+the floor's work-days), and project (work-days done ÷ total across buildings). Floor percentages need not add
+up to the building's: the building measures how far along its longest chain the work has reached, while
+breaks and common work belong to no floor.
+
+### Import: Excel → JSON → database
+
+1. `php artisan timeline:excel-to-json` reads the workbooks in `CLIENT_WORKBOOKS_DIR` into
+   `storage/app/private/imports/<date>/project.json` (git-ignored), guesses floors from activity names, prints
+   the guesses, and stores Excel's planned dates and Chart figures alongside.
+2. Correct floors in the JSON if needed.
+3. `php artisan timeline:import-json <file> --owner=<email> --dry-run`, then without `--dry-run`. It validates
+   (`PlanDocumentValidator`: shape, rows, floors, breaks, loops, every planned date), writes in one
+   transaction, reads back every date and figure against the file, and logs to `plan_imports`. A dry run does
+   the same and rolls back. The Excel upload in the UI goes through the same validator.
 

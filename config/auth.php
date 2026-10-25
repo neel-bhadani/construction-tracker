@@ -103,6 +103,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Registration
+    |--------------------------------------------------------------------------
+    |
+    | Whether anyone may create an account at /register. Closed, the register
+    | routes return 404 and the sign-in page says nothing about signing up;
+    | `php artisan user:create` still adds an account.
+    |
+    */
+
+    'registration_open' => (bool) env('REGISTRATION_OPEN', true),
+
+    /*
+    |--------------------------------------------------------------------------
     | Password Confirmation Timeout
     |--------------------------------------------------------------------------
     |

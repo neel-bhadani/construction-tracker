@@ -25,6 +25,8 @@ class ImportController extends Controller
             return response()->json(['message' => 'The file could not be read as an Excel workbook.', 'errors' => ['file' => ['The file could not be read as an Excel workbook.']]], 422);
         }
 
+        $request->session()->push(ImportUploads::SESSION_KEY, $token);
+
         return response()->json(['token' => $token, 'name' => $request->file('file')->getClientOriginalName(), 'sheets' => $sheets]);
     }
 }

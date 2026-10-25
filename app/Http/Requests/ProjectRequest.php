@@ -24,7 +24,7 @@ class ProjectRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:150',
-                Rule::unique('projects', 'name')->whereNull('deleted_at')->ignore($this->route('project'))],
+                Rule::unique('projects', 'name')->where('owner_id', $this->user()->id)->whereNull('deleted_at')->ignore($this->route('project'))],
             'details' => ['nullable', 'string', 'max:5000'],
             'planned_start_date' => ['required', 'date_format:Y-m-d'],
             'timezone' => ['required', 'timezone:all'],
@@ -37,7 +37,7 @@ class ProjectRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'name.unique' => 'There is already a project with that name.',
+            'name.unique' => 'You already have a project with that name.',
             'planned_start_date.required' => 'Give the planned start date. New buildings start on it unless you choose another.',
             'timezone.timezone' => 'Choose a timezone from the list.',
         ];

@@ -31,3 +31,11 @@ export function leadWord(n) {
   if (n < 0) return 'behind'
   return 'on plan'
 }
+
+// 12 -> '+12 days ahead', -5 -> '−5 days behind', 0 -> 'On plan'
+export function leadText(n) {
+  if (n === null || n === undefined) return 'No actuals yet'
+  if (n === 0) return 'On plan'
+  const days = Math.abs(n) === 1 ? 'day' : 'days'
+  return n > 0 ? `+${n} ${days} ahead` : `−${Math.abs(n)} ${days} behind`
+}

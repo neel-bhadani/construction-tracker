@@ -3,25 +3,32 @@
 namespace App\Http\Requests;
 
 use App\Data\SchedulePreview;
+use App\Http\Requests\Concerns\ValidatesActualDate;
 use App\Http\Requests\Concerns\ValidatesChain;
 use App\Models\Activity;
 use App\Models\Building;
+use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 
 /**
- * Adding or editing an activity: admin only, because every field here can reshape the plan.
+ * Adding or editing an activity in a building the account owns: its name, where it comes in the
+ * chain, its floor, its planned date (stored as the offset), its actual date, the break flag and
+ * a note.
  */
 class ActivityRequest extends FormRequest
 {
-    use ValidatesChain;
+    use ValidatesActualDate, ValidatesChain;
 
     public ?SchedulePreview $preview = null;
 
-    public function authorize(): bool
+    /** A Response, so the owner's-only refusal stays a 404. */
+    public function authorize(): Response
     {
         return $this->activity()
-            ? $this->user()->can('update', $this->activity())
-            : $this->user()->can('create', Activity::class);
+            ? Gate::inspect('update', $this->activity())
+            : Gate::inspect('create', [Activity::class, $this->building()]);
     }
 
     /**
@@ -32,8 +39,11 @@ class ActivityRequest extends FormRequest
         return [
             'description' => ['required', 'string', 'max:255'],
             ...$this->chainRules(),
-            'adjustment_reason' => ['nullable', 'string', 'max:255', 'required_unless:date_adjustment_days,0'],
             'is_break' => ['required', 'boolean'],
+            'actual_date' => [...$this->actualDateRules($this->building()), 'prohibited_if_accepted:is_break'],
+            // none is the whole building; a break is on no floor
+            'floor_id' => ['nullable', 'integer', 'prohibited_if_accepted:is_break',
+                Rule::exists('floors', 'id')->where('building_id', $this->building()->id)->whereNull('deleted_at')],
             'notes' => ['nullable', 'string', 'max:5000'],
         ];
     }
@@ -44,8 +54,11 @@ class ActivityRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'description.required' => 'Enter the activity name.',
             ...$this->chainMessages(),
-            'adjustment_reason.required_unless' => 'Give a reason for the date adjustment. Hidden nudges are what this replaces.',
+            ...$this->actualDateMessages($this->building()),
+            'floor_id.exists' => 'Choose a floor of this building.',
+            'floor_id.prohibited_if_accepted' => 'A break is on no floor.',
         ];
     }
 
@@ -54,7 +67,13 @@ class ActivityRequest extends FormRequest
      */
     public function plan(): array
     {
-        return [...$this->safe()->only(['description', 'adjustment_reason', 'notes']), ...$this->chain(), 'is_break' => $this->boolean('is_break')];
+        return [
+            ...$this->safe()->only(['description', 'notes']),
+            ...$this->chain(),
+            'is_break' => $this->boolean('is_break'),
+            'actual_date' => $this->validated('actual_date'),
+            'floor_id' => $this->filled('floor_id') ? $this->integer('floor_id') : null,
+        ];
     }
 
     protected function building(): Building

@@ -2,19 +2,17 @@
 
 namespace App\Http\Requests;
 
-use App\Models\Building;
-use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Support\Facades\Gate;
 
 /**
  * The first step of "Import from Excel": the file, before its sheet is chosen.
  */
 class ImportUploadRequest extends FormRequest
 {
-    public function authorize(): Response
+    /** Any account: the file is only read, and only this session can import it. */
+    public function authorize(): bool
     {
-        return Gate::inspect('create', Building::class);
+        return true;
     }
 
     /**

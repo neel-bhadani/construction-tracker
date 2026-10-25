@@ -9,7 +9,6 @@ use App\Models\ActivityRevision;
 use App\Models\Building;
 use App\Models\BuildingRevision;
 use App\Models\Project;
-use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -19,8 +18,6 @@ use Tests\TestCase;
 class BuildingsTest extends TestCase
 {
     use RefreshDatabase;
-
-    private User $editor;
 
     private Project $sv;
 
@@ -33,21 +30,20 @@ class BuildingsTest extends TestCase
         $this->withoutVite();
         $this->seedClientWorkbooks();
         $this->travelTo('2026-10-15 12:00');
-        $this->editor = User::factory()->editor()->create();
         $this->sv = Project::sole();
-        $this->heights = Project::create(['name' => 'Shaligram Heights', 'planned_start_date' => '2027-01-01']);
+        $this->heights = Project::create(['owner_id' => $this->owner()->id, 'name' => 'Shaligram Heights', 'planned_start_date' => '2027-01-01']);
     }
 
     /* ---------------- adding ---------------- */
 
     public function test_an_empty_building_takes_the_projects_start_and_goes_last(): void
     {
-        $this->actingAs($this->editor)->post("/projects/{$this->sv->id}/buildings", ['name' => 'Tower C', 'type' => 'building', 'plan' => 'empty'])
+        $this->actingAs($this->owner())->post("/projects/{$this->sv->id}/buildings", ['name' => 'Tower C', 'type' => 'building', 'plan' => 'empty'])
             ->assertSessionHasNoErrors();
 
         $building = Building::where('name', 'Tower C')->sole();
         $this->assertSame(['2026-04-05', 4, 0], [$building->planned_start_date->toDateString(), $building->sort_order, $building->activities()->count()]);
-        $this->assertSame([['created', null, 'Tower C', null, $this->editor->id]], $this->revisions($building));
+        $this->assertSame([['created', null, 'Tower C', null, $this->owner()->id]], $this->revisions($building));
     }
 
     /**
@@ -60,7 +56,7 @@ class BuildingsTest extends TestCase
         $source = Building::where('name', 'Tower A')->sole();
         Activity::where('building_id', $source->id)->where('description', '1st SLAB')->update(['notes' => 'Site note']);
 
-        $this->actingAs($this->editor)->post("/projects/{$this->heights->id}/buildings", [
+        $this->actingAs($this->owner())->post("/projects/{$this->heights->id}/buildings", [
             'name' => 'Wing 1', 'type' => 'building', 'planned_start_date' => '2027-03-01', 'plan' => 'copy', 'copy_from' => $source->id,
         ])->assertSessionHasNoErrors();
 
@@ -90,7 +86,7 @@ class BuildingsTest extends TestCase
         // every copied activity names where it came from
         $origin = 'copied from Shaligram Vrundavan › Tower A';
         $this->assertSame(52, ActivityRevision::where('field', 'created')->where('new_value', 'like', "%({$origin})")->count());
-        $this->assertSame([['created', null, 'Wing 1', $origin, $this->editor->id]], $this->revisions($copy));
+        $this->assertSame([['created', null, 'Wing 1', $origin, $this->owner()->id]], $this->revisions($copy));
     }
 
     public function test_copy_needs_a_building_that_still_exists(): void
@@ -98,9 +94,9 @@ class BuildingsTest extends TestCase
         $gone = Building::where('name', 'Tower B')->sole();
         $gone->delete();
 
-        $this->actingAs($this->editor)->post("/projects/{$this->heights->id}/buildings", ['name' => 'Wing 1', 'type' => 'building', 'plan' => 'copy'])
+        $this->actingAs($this->owner())->post("/projects/{$this->heights->id}/buildings", ['name' => 'Wing 1', 'type' => 'building', 'plan' => 'copy'])
             ->assertSessionHasErrors(['copy_from' => 'Choose the building to copy the plan from.']);
-        $this->actingAs($this->editor)->post("/projects/{$this->heights->id}/buildings", ['name' => 'Wing 1', 'type' => 'building', 'plan' => 'copy', 'copy_from' => $gone->id])
+        $this->actingAs($this->owner())->post("/projects/{$this->heights->id}/buildings", ['name' => 'Wing 1', 'type' => 'building', 'plan' => 'copy', 'copy_from' => $gone->id])
             ->assertSessionHasErrors(['copy_from' => 'That building no longer exists. Choose another.']);
 
         $this->assertSame(0, $this->heights->buildings()->count());
@@ -117,7 +113,7 @@ class BuildingsTest extends TestCase
         $this->assertContains('Tower B', $upload['sheets']);
         $this->assertSame('SV_B3.xlsx', $upload['name']);
 
-        $this->actingAs($this->editor)->post("/projects/{$this->heights->id}/buildings", [
+        $this->actingAs($this->owner())->post("/projects/{$this->heights->id}/buildings", [
             'name' => 'Tower B copy', 'type' => 'building', 'planned_start_date' => '2026-04-05', 'plan' => 'import', 'import_token' => $upload['token'], 'sheet' => 'Tower B',
         ])->assertSessionHasNoErrors();
 
@@ -136,7 +132,7 @@ class BuildingsTest extends TestCase
     {
         $upload = $this->upload('SV_Overall3.xlsx');
 
-        $this->actingAs($this->editor)->post("/projects/{$this->heights->id}/buildings", [
+        $this->actingAs($this->owner())->post("/projects/{$this->heights->id}/buildings", [
             'name' => 'Site works', 'type' => 'common_work', 'plan' => 'import', 'import_token' => $upload['token'], 'sheet' => 'Overall Timeline',
         ])->assertSessionHasNoErrors();
 
@@ -151,13 +147,13 @@ class BuildingsTest extends TestCase
         $upload = $this->upload('SV_A3.xlsx');
         $before = Building::withTrashed()->count();
 
-        $this->actingAs($this->editor)->post("/projects/{$this->heights->id}/buildings", [
+        $this->actingAs($this->owner())->post("/projects/{$this->heights->id}/buildings", [
             'name' => 'Wing 1', 'type' => 'building', 'plan' => 'import', 'import_token' => $upload['token'], 'sheet' => 'TA Chart',
         ])->assertSessionHasErrors('sheet');
 
         $this->assertSame('Sheet [TA Chart] cannot be imported. Unrecognised date formula in D4: an empty cell', session('errors')->first('sheet'));
 
-        $this->actingAs($this->editor)->post("/projects/{$this->heights->id}/buildings", [
+        $this->actingAs($this->owner())->post("/projects/{$this->heights->id}/buildings", [
             'name' => 'Wing 1', 'type' => 'building', 'plan' => 'import', 'import_token' => $upload['token'], 'sheet' => 'No such sheet',
         ])->assertSessionHasErrors(['sheet' => 'Sheet [No such sheet] cannot be imported. The workbook has no sheet named [No such sheet].']);
         $this->assertSame($before, Building::withTrashed()->count());
@@ -167,7 +163,7 @@ class BuildingsTest extends TestCase
     {
         $fake = UploadedFile::fake()->create('plan.pdf', 10, 'application/pdf');
 
-        $this->actingAs($this->editor)->postJson('/imports', ['file' => $fake])
+        $this->actingAs($this->owner())->postJson('/imports', ['file' => $fake])
             ->assertUnprocessable()
             ->assertJsonPath('errors.file.0', 'Choose an Excel workbook (.xlsx).');
     }
@@ -175,7 +171,7 @@ class BuildingsTest extends TestCase
     public function test_an_expired_or_invented_upload_token_is_refused(): void
     {
         foreach (['not-a-token', '9f3b6a52-1c4d-4f8e-9a6b-000000000000'] as $token) {
-            $this->actingAs($this->editor)->post("/projects/{$this->heights->id}/buildings", [
+            $this->actingAs($this->owner())->post("/projects/{$this->heights->id}/buildings", [
                 'name' => 'Wing 1', 'type' => 'building', 'plan' => 'import', 'import_token' => $token, 'sheet' => 'Tower A',
             ])->assertSessionHasErrors(['import_token' => 'The uploaded file has expired. Choose it again.']);
         }
@@ -185,10 +181,10 @@ class BuildingsTest extends TestCase
 
     public function test_building_names_are_unique_within_a_project_only(): void
     {
-        $this->actingAs($this->editor)->post("/projects/{$this->sv->id}/buildings", ['name' => 'Tower A', 'type' => 'building', 'plan' => 'empty'])
+        $this->actingAs($this->owner())->post("/projects/{$this->sv->id}/buildings", ['name' => 'Tower A', 'type' => 'building', 'plan' => 'empty'])
             ->assertSessionHasErrors(['name' => 'This project already has a building with that name.']);
 
-        $this->actingAs($this->editor)->post("/projects/{$this->heights->id}/buildings", ['name' => 'Tower A', 'type' => 'building', 'plan' => 'empty'])
+        $this->actingAs($this->owner())->post("/projects/{$this->heights->id}/buildings", ['name' => 'Tower A', 'type' => 'building', 'plan' => 'empty'])
             ->assertSessionHasNoErrors();
     }
 
@@ -196,15 +192,15 @@ class BuildingsTest extends TestCase
     {
         $towerA = Building::where('name', 'Tower A')->sole();
 
-        $this->actingAs($this->editor)->patch("/projects/{$this->sv->id}/buildings/{$towerA->id}", [
+        $this->actingAs($this->owner())->patch("/projects/{$this->sv->id}/buildings/{$towerA->id}", [
             'name' => 'Tower A (North)', 'type' => 'common_work', 'planned_start_date' => '2030-01-01',
         ])->assertSessionHasNoErrors();
 
         $towerA->refresh();
         $this->assertSame(['Tower A (North)', 'common_work', '2026-04-05'], [$towerA->name, $towerA->type->value, $towerA->planned_start_date->toDateString()]);
         $this->assertSame([
-            ['name', 'Tower A', 'Tower A (North)', null, $this->editor->id],
-            ['type', 'building', 'common_work', null, $this->editor->id],
+            ['name', 'Tower A', 'Tower A (North)', null, $this->owner()->id],
+            ['type', 'building', 'common_work', null, $this->owner()->id],
         ], $this->revisions($towerA));
     }
 
@@ -212,16 +208,16 @@ class BuildingsTest extends TestCase
     {
         $overall = Building::where('name', 'Overall Timeline')->sole();
 
-        $this->actingAs($this->editor)->patch("/projects/{$this->sv->id}/buildings/{$overall->id}/move", ['direction' => 'up'])->assertSessionHasNoErrors();
+        $this->actingAs($this->owner())->patch("/projects/{$this->sv->id}/buildings/{$overall->id}/move", ['direction' => 'up'])->assertSessionHasNoErrors();
         $this->assertSame(['Tower A', 'Overall Timeline', 'Tower B'], $this->sv->buildings()->orderBy('sort_order')->pluck('name')->all());
 
         // the top one cannot go higher
         $towerA = Building::where('name', 'Tower A')->sole();
-        $this->actingAs($this->editor)->patch("/projects/{$this->sv->id}/buildings/{$towerA->id}/move", ['direction' => 'up']);
+        $this->actingAs($this->owner())->patch("/projects/{$this->sv->id}/buildings/{$towerA->id}/move", ['direction' => 'up']);
         $this->assertSame(['Tower A', 'Overall Timeline', 'Tower B'], $this->sv->buildings()->orderBy('sort_order')->pluck('name')->all());
 
         $this->assertSame(2, BuildingRevision::where('field', 'sort_order')->count());
-        $this->actingAs($this->editor)->patch("/projects/{$this->sv->id}/buildings/{$towerA->id}/move", ['direction' => 'sideways'])->assertSessionHasErrors('direction');
+        $this->actingAs($this->owner())->patch("/projects/{$this->sv->id}/buildings/{$towerA->id}/move", ['direction' => 'sideways'])->assertSessionHasErrors('direction');
     }
 
     /** A soft delete: the timeline leaves the app, its activities and every revision stay. */
@@ -230,16 +226,16 @@ class BuildingsTest extends TestCase
         $towerB = Building::where('name', 'Tower B')->sole();
         $actuals = Activity::where('building_id', $towerB->id)->whereNotNull('actual_date')->count();
 
-        $this->actingAs($this->editor)->delete("/projects/{$this->sv->id}/buildings/{$towerB->id}")
+        $this->actingAs($this->owner())->delete("/projects/{$this->sv->id}/buildings/{$towerB->id}")
             ->assertRedirect("/projects/{$this->sv->id}");
 
         $this->assertSoftDeleted($towerB);
         $this->assertSame([52, 3], [Activity::where('building_id', $towerB->id)->count(), $actuals]);
-        $this->assertSame([['deleted', 'Tower B', null, null, $this->editor->id]], $this->revisions($towerB));
+        $this->assertSame([['deleted', 'Tower B', null, null, $this->owner()->id]], $this->revisions($towerB));
         $this->assertSame(['Tower A', 'Overall Timeline'], $this->sv->buildings()->orderBy('sort_order')->pluck('name')->all());
 
         // its name is free again
-        $this->actingAs($this->editor)->post("/projects/{$this->sv->id}/buildings", ['name' => 'Tower B', 'type' => 'building', 'plan' => 'empty'])
+        $this->actingAs($this->owner())->post("/projects/{$this->sv->id}/buildings", ['name' => 'Tower B', 'type' => 'building', 'plan' => 'empty'])
             ->assertSessionHasNoErrors();
     }
 
@@ -253,7 +249,7 @@ class BuildingsTest extends TestCase
         $path = tempnam(sys_get_temp_dir(), 'plan').'.xlsx';
         copy(ScheduleWorkbook::directory()."/{$workbook}", $path);
 
-        return $this->actingAs($this->editor)
+        return $this->actingAs($this->owner())
             ->post('/imports', ['file' => new UploadedFile($path, $workbook, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true)], ['Accept' => 'application/json'])
             ->assertOk()
             ->json();

@@ -8,10 +8,13 @@ use Illuminate\Support\Str;
 /**
  * Workbooks uploaded for "Import from Excel", held between choosing the file and choosing the
  * sheet. Each is addressed by a random token, never by a name the user supplied, and anything
- * older than an hour is removed whenever a new one arrives.
+ * older than an hour is removed whenever a new one arrives. The tokens a session uploaded are kept
+ * in it under SESSION_KEY, and only those can be imported.
  */
 class ImportUploads
 {
+    public const SESSION_KEY = 'import_tokens';
+
     private const LIFETIME_SECONDS = 3600;
 
     /** Defaults to storage/app/private/imports; tests pass a temporary directory. */

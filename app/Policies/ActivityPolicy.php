@@ -2,51 +2,49 @@
 
 namespace App\Policies;
 
-use App\Enums\Role;
 use App\Models\Activity;
+use App\Models\Building;
 use App\Models\User;
+use Illuminate\Auth\Access\Response;
 
 /**
- * viewer: read. editor: record and change actual_date and its note — which move no planned
- * date. admin: everything that reshapes the plan: durations, predecessors, adjustments.
+ * Everything, the plan and what happened on site, for the owner of the activity's project; a 404
+ * for anyone else.
  */
 class ActivityPolicy
 {
-    /** An unapproved account can do nothing, whatever its role says. */
-    public function before(User $user): ?bool
+    public function view(User $user, Activity $activity): Response
     {
-        return $user->approved_at === null ? false : null;
+        return $this->owns($user, $activity);
     }
 
-    public function viewAny(User $user): bool
+    /** actual_date and notes. */
+    public function recordActual(User $user, Activity $activity): Response
     {
-        return true;
+        return $this->owns($user, $activity);
     }
 
-    public function view(User $user, Activity $activity): bool
+    /** A new activity in this building. */
+    public function create(User $user, Building $building): Response
     {
-        return true;
+        return app(BuildingPolicy::class)->update($user, $building);
     }
 
-    /** actual_date and notes only. */
-    public function recordActual(User $user, Activity $activity): bool
+    /** The plan: description, predecessor, offset, adjustment, break flag, notes. */
+    public function update(User $user, Activity $activity): Response
     {
-        return in_array($user->role, [Role::Editor, Role::Admin], true);
+        return $this->owns($user, $activity);
     }
 
-    public function create(User $user): bool
+    public function delete(User $user, Activity $activity): Response
     {
-        return $user->role === Role::Admin;
+        return $this->owns($user, $activity);
     }
 
-    /** The plan: description, predecessor, offset, adjustment and reason, break flag. */
-    public function update(User $user, Activity $activity): bool
+    private function owns(User $user, Activity $activity): Response
     {
-        return $user->role === Role::Admin;
-    }
+        $building = $activity->building()->withTrashed()->first();
 
-    public function delete(User $user, Activity $activity): bool
-    {
-        return $user->role === Role::Admin;
+        return $building === null ? Response::denyAsNotFound() : app(BuildingPolicy::class)->update($user, $building);
     }
 }

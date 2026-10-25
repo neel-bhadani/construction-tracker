@@ -16,8 +16,6 @@ class ProjectsTest extends TestCase
 {
     use RefreshDatabase;
 
-    private User $editor;
-
     protected function setUp(): void
     {
         parent::setUp();
@@ -25,7 +23,6 @@ class ProjectsTest extends TestCase
         $this->withoutVite();
         $this->seedClientWorkbooks();
         $this->travelTo('2026-10-15 12:00');
-        $this->editor = User::factory()->editor()->create();
     }
 
     /* ---------------- the summary figures ---------------- */
@@ -54,9 +51,9 @@ class ProjectsTest extends TestCase
     /** Most behind skips buildings with no actuals; handover falls back to the planned finish. */
     public function test_buildings_without_actuals_are_skipped_for_most_behind_and_use_their_planned_finish(): void
     {
-        $project = Project::create(['name' => 'Fresh', 'planned_start_date' => '2027-01-01']);
+        $project = Project::create(['owner_id' => $this->owner()->id, 'name' => 'Fresh', 'planned_start_date' => '2027-01-01']);
         $source = Building::where('name', 'Tower B')->sole();
-        app(ProjectEditor::class)->createBuilding($project, ['name' => 'Wing 1', 'type' => 'building'], $this->editor, $source);
+        app(ProjectEditor::class)->createBuilding($project, ['name' => 'Wing 1', 'type' => 'building'], $this->owner(), $source);
 
         $summary = app(ProjectSummaryService::class)->summarise($project);
 
@@ -68,32 +65,32 @@ class ProjectsTest extends TestCase
 
     public function test_a_project_without_buildings_has_no_figures_rather_than_invented_ones(): void
     {
-        $project = Project::create(['name' => 'Empty', 'planned_start_date' => '2027-01-01']);
+        $project = Project::create(['owner_id' => $this->owner()->id, 'name' => 'Empty', 'planned_start_date' => '2027-01-01']);
 
         $summary = app(ProjectSummaryService::class)->summarise($project);
 
         $this->assertSame([0, null, null, null], [$summary->buildingsCount, $summary->progress, $summary->mostBehind, $summary->expectedHandover]);
     }
 
-    public function test_projects_page_lists_every_project_with_its_summary(): void
+    public function test_projects_page_lists_every_project_of_the_account_with_its_summary(): void
     {
-        Project::create(['name' => 'Another', 'planned_start_date' => '2027-01-01']);
+        Project::create(['owner_id' => $this->owner()->id, 'name' => 'Another', 'planned_start_date' => '2027-01-01']);
+        Project::create(['owner_id' => User::factory()->create()->id, 'name' => 'Not mine', 'planned_start_date' => '2027-01-01']);
 
-        $this->actingAs(User::factory()->create())->get('/projects')->assertOk()
+        $this->actingAs($this->owner())->get('/projects')->assertOk()
             ->assertInertia(fn (Assert $page) => $page->component('Projects/Index')
                 ->has('projects', 2)
                 ->where('projects.0.name', 'Another')
                 ->where('projects.1.name', 'Shaligram Vrundavan')
                 ->where('projects.1.buildingsCount', 3)
-                ->where('projects.1.mostBehind.name', 'Tower B')
-                ->where('can.create', false));
+                ->where('projects.1.mostBehind.name', 'Tower B'));
     }
 
     public function test_project_page_shows_a_card_per_building_and_every_copy_source(): void
     {
         $project = Project::sole();
 
-        $this->actingAs($this->editor)->get("/projects/{$project->id}")->assertOk()
+        $this->actingAs($this->owner())->get("/projects/{$project->id}")->assertOk()
             ->assertInertia(fn (Assert $page) => $page->component('Projects/Show')
                 ->where('project.name', 'Shaligram Vrundavan')
                 ->has('project.buildings', 3)
@@ -101,15 +98,15 @@ class ProjectsTest extends TestCase
                 ->has('copySources', 3)
                 ->where('copySources.0.label', 'Shaligram Vrundavan › Tower A')
                 ->where('copySources.0.activities', 52)
-                ->where('can', ['manageProject' => true, 'manageBuildings' => true]));
+                ->missing('can'));
     }
 
     public function test_header_switcher_lists_projects_but_not_deleted_ones(): void
     {
-        $gone = Project::create(['name' => 'Gone', 'planned_start_date' => '2027-01-01']);
-        app(ProjectEditor::class)->deleteProject($gone, $this->editor);
+        $gone = Project::create(['owner_id' => $this->owner()->id, 'name' => 'Gone', 'planned_start_date' => '2027-01-01']);
+        app(ProjectEditor::class)->deleteProject($gone, $this->owner());
 
-        $this->actingAs($this->editor)->get('/projects')
+        $this->actingAs($this->owner())->get('/projects')
             ->assertInertia(fn (Assert $page) => $page->has('projects', 1)->where('projects.0.name', 'Shaligram Vrundavan'));
     }
 
@@ -117,14 +114,14 @@ class ProjectsTest extends TestCase
 
     public function test_editor_creates_a_project_which_records_its_creator_and_is_audited(): void
     {
-        $this->actingAs($this->editor)->post('/projects', [
+        $this->actingAs($this->owner())->post('/projects', [
             'name' => 'Shaligram Heights', 'details' => 'Bopal, 4 towers', 'planned_start_date' => '2027-02-01', 'timezone' => '',
         ])->assertSessionHasNoErrors();
 
         $project = Project::where('name', 'Shaligram Heights')->sole();
-        $this->assertSame(['Bopal, 4 towers', '2027-02-01', 'Asia/Kolkata', $this->editor->id],
+        $this->assertSame(['Bopal, 4 towers', '2027-02-01', 'Asia/Kolkata', $this->owner()->id],
             [$project->details, $project->planned_start_date->toDateString(), $project->timezone, $project->created_by]);
-        $this->assertSame([['created', null, 'Shaligram Heights', $this->editor->id]], $this->revisions($project));
+        $this->assertSame([['created', null, 'Shaligram Heights', $this->owner()->id]], $this->revisions($project));
     }
 
     public function test_editing_a_project_audits_each_changed_field_and_moves_no_planned_date(): void
@@ -132,14 +129,14 @@ class ProjectsTest extends TestCase
         $project = Project::sole();
         $before = \DB::table('activities')->pluck('planned_date', 'id')->all();
 
-        $this->actingAs($this->editor)->patch("/projects/{$project->id}", [
+        $this->actingAs($this->owner())->patch("/projects/{$project->id}", [
             'name' => 'Shaligram Vrundavan', 'details' => 'Phase 1', 'planned_start_date' => '2026-06-01', 'timezone' => 'Asia/Dubai',
         ])->assertSessionHasNoErrors();
 
         $this->assertEqualsCanonicalizing([
-            ['details', null, 'Phase 1', $this->editor->id],
-            ['planned_start_date', '2026-04-05', '2026-06-01', $this->editor->id],
-            ['timezone', 'Asia/Kolkata', 'Asia/Dubai', $this->editor->id],
+            ['details', null, 'Phase 1', $this->owner()->id],
+            ['planned_start_date', '2026-04-05', '2026-06-01', $this->owner()->id],
+            ['timezone', 'Asia/Kolkata', 'Asia/Dubai', $this->owner()->id],
         ], $this->revisions($project));
         // only the default for new buildings: no building, and no date, moves
         $this->assertSame($before, \DB::table('activities')->pluck('planned_date', 'id')->all());
@@ -148,20 +145,31 @@ class ProjectsTest extends TestCase
 
     public function test_project_names_are_unique_among_live_projects_and_free_again_once_deleted(): void
     {
-        $this->actingAs($this->editor)->post('/projects', ['name' => 'Shaligram Vrundavan', 'planned_start_date' => '2027-01-01', 'timezone' => 'Asia/Kolkata'])
-            ->assertSessionHasErrors(['name' => 'There is already a project with that name.']);
+        $this->actingAs($this->owner())->post('/projects', ['name' => 'Shaligram Vrundavan', 'planned_start_date' => '2027-01-01', 'timezone' => 'Asia/Kolkata'])
+            ->assertSessionHasErrors(['name' => 'You already have a project with that name.']);
 
-        $this->actingAs($this->editor)->post('/projects', ['name' => 'Short lived', 'planned_start_date' => '2027-01-01', 'timezone' => 'Asia/Kolkata']);
-        $this->actingAs($this->editor)->delete('/projects/'.Project::where('name', 'Short lived')->value('id'))->assertSessionHasNoErrors();
+        $this->actingAs($this->owner())->post('/projects', ['name' => 'Short lived', 'planned_start_date' => '2027-01-01', 'timezone' => 'Asia/Kolkata']);
+        $this->actingAs($this->owner())->delete('/projects/'.Project::where('name', 'Short lived')->value('id'))->assertSessionHasNoErrors();
 
-        $this->actingAs($this->editor)->post('/projects', ['name' => 'Short lived', 'planned_start_date' => '2027-01-01', 'timezone' => 'Asia/Kolkata'])
+        $this->actingAs($this->owner())->post('/projects', ['name' => 'Short lived', 'planned_start_date' => '2027-01-01', 'timezone' => 'Asia/Kolkata'])
             ->assertSessionHasNoErrors();
         $this->assertSame(2, Project::withTrashed()->where('name', 'Short lived')->count());
     }
 
+    /** Names are unique per account: another account's project of the same name is no clash. */
+    public function test_another_account_may_use_the_same_project_name(): void
+    {
+        $other = User::factory()->create();
+
+        $this->actingAs($other)->post('/projects', ['name' => 'Shaligram Vrundavan', 'planned_start_date' => '2027-01-01', 'timezone' => 'Asia/Kolkata'])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame([$this->owner()->id, $other->id], Project::where('name', 'Shaligram Vrundavan')->orderBy('id')->pluck('owner_id')->all());
+    }
+
     public function test_bad_input_gets_plain_language_messages(): void
     {
-        $this->actingAs($this->editor)->post('/projects', ['name' => '', 'planned_start_date' => '', 'timezone' => 'Mars/Olympus'])
+        $this->actingAs($this->owner())->post('/projects', ['name' => '', 'planned_start_date' => '', 'timezone' => 'Mars/Olympus'])
             ->assertSessionHasErrors([
                 'name' => 'The name field is required.',
                 'planned_start_date' => 'Give the planned start date. New buildings start on it unless you choose another.',
@@ -173,7 +181,7 @@ class ProjectsTest extends TestCase
     {
         $project = Project::sole();
 
-        $this->actingAs($this->editor)->delete("/projects/{$project->id}")
+        $this->actingAs($this->owner())->delete("/projects/{$project->id}")
             ->assertSessionHasErrors(['project' => '[Shaligram Vrundavan] still has buildings: Tower A, Tower B, Overall Timeline. Delete them first.']);
 
         $this->assertNotSoftDeleted($project);
@@ -182,13 +190,13 @@ class ProjectsTest extends TestCase
 
     public function test_deleting_an_empty_project_is_a_soft_delete_and_is_audited(): void
     {
-        $project = Project::create(['name' => 'Cancelled', 'planned_start_date' => '2027-01-01']);
+        $project = Project::create(['owner_id' => $this->owner()->id, 'name' => 'Cancelled', 'planned_start_date' => '2027-01-01']);
 
-        $this->actingAs($this->editor)->delete("/projects/{$project->id}")->assertRedirect('/projects');
+        $this->actingAs($this->owner())->delete("/projects/{$project->id}")->assertRedirect('/projects');
 
         $this->assertSoftDeleted($project);
-        $this->assertSame([['deleted', 'Cancelled', null, $this->editor->id]], $this->revisions($project));
-        $this->actingAs($this->editor)->get("/projects/{$project->id}")->assertNotFound();
+        $this->assertSame([['deleted', 'Cancelled', null, $this->owner()->id]], $this->revisions($project));
+        $this->actingAs($this->owner())->get("/projects/{$project->id}")->assertNotFound();
     }
 
     /**

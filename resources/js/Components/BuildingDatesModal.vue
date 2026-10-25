@@ -5,7 +5,7 @@ import Modal from './Modal.vue'
 import FormField from './FormField.vue'
 
 /*
- | Admin only. The planned start moves every planned date in this building;
+ | The planned start moves every planned date in this building;
  | the server recalculates it and records the change.
  */
 const props = defineProps({ show: Boolean, projectId: Number, building: Object })

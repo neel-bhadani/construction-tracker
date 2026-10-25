@@ -36,7 +36,8 @@ One row per client project. The first is Shaligram Vrundavan.
 | Column | Type | Null | Default | Notes |
 | --- | --- | --- | --- | --- |
 | `id` | bigint unsigned, auto | no | | PK |
-| `name` | varchar(150) | no | | Unique among projects that are not deleted |
+| `owner_id` | bigint unsigned | no | | FK → `users.id`, `ON DELETE RESTRICT`. The one account that sees and changes it |
+| `name` | varchar(150) | no | | Unique among the owner's projects that are not deleted |
 | `details` | text | yes | null | Free text |
 | `planned_start_date` | date | no | | **Only the default start of a new building.** Changing it moves nothing |
 | `timezone` | varchar(64) | no | `Asia/Kolkata` | Decides "today" for the project's buildings |
@@ -46,8 +47,9 @@ One row per client project. The first is Shaligram Vrundavan.
 | `deleted_at` | timestamp | yes | null | Soft delete |
 | `active_name` | varchar(150), generated | yes | | `IF(deleted_at IS NULL, name, NULL)`, stored |
 
-`UNIQUE (active_name)`. MySQL lets any number of NULLs share a unique index, so a plain `UNIQUE (name, deleted_at)`
-would not stop two live projects sharing a name; the generated column does, and frees a deleted project's name.
+`UNIQUE (owner_id, active_name)`. MySQL lets any number of NULLs share a unique index, so a plain
+`UNIQUE (owner_id, name, deleted_at)` would not stop two live projects of one owner sharing a name; the generated
+column does, and frees a deleted project's name.
 
 A project is deleted only once it has no buildings; the refusal names them.
 
@@ -94,6 +96,7 @@ The core table. One row per activity, including holiday breaks.
 | --- | --- | --- | --- | --- |
 | `id` | bigint unsigned, auto | no | | PK |
 | `building_id` | bigint unsigned | no | | FK → `buildings.id`, `ON DELETE CASCADE`. Formerly `scope_id` |
+| `floor_id` | bigint unsigned | yes | null | FK → `floors.id`, `ON DELETE SET NULL`. Null = whole building / common work. A break has none |
 | `description` | varchar(255) | no | | e.g. `3rd SLAB 15` |
 | `predecessor_id` | bigint unsigned | yes | null | FK → `activities.id`, `ON DELETE RESTRICT`. Null = chain root |
 | `offset_days` | smallint unsigned | no | 0 | Days after the predecessor |
@@ -125,6 +128,26 @@ computation. Keep both.
 `planned_day` and `planned_date` are the **only** derived values that are stored. They are written exclusively
 by `ScheduleRecalculator`, never by a controller, model mutator, or observer. Everything else — progress, pace,
 forecasts, lead, status — is computed at read time.
+
+---
+
+## floors
+
+Optional floors of a building. A building without any looks exactly as before.
+
+| Column | Type | Null | Default | Notes |
+| --- | --- | --- | --- | --- |
+| `id` | bigint unsigned, auto | no | | PK |
+| `building_id` | bigint unsigned | no | | FK → `buildings.id`, `ON DELETE CASCADE` |
+| `name` | varchar(50) | no | | "Ground floor", "1st floor", "Basement 1" |
+| `level` | smallint | no | | Sort order: ground 0, basements negative |
+| `created_at` / `updated_at` | timestamp | yes | | |
+| `deleted_at` | timestamp | yes | null | Soft delete, through `FloorEditor`, which first moves the floor's activities to the whole building |
+| `active_name` | varchar(50), generated | yes | | `IF(deleted_at IS NULL, name, NULL)`, stored |
+
+`UNIQUE (building_id, active_name)`, as on buildings; `INDEX (building_id, level)`. Floor changes are audited in
+`building_revisions` (`floor_added`, `floor_renamed`, `floor_deleted`); an activity's floor in `activity_revisions`
+(`floor_id`).
 
 ---
 
@@ -197,26 +220,36 @@ Index on `(building_id, created_at)`.
 
 ---
 
+## plan_imports
+
+The log of `php artisan timeline:import-json`, one row per imported project. Written only by `PlanImporter`.
+
+| Column | Type | Null | Default | Notes |
+| --- | --- | --- | --- | --- |
+| `id` | bigint unsigned, auto | no | | PK |
+| `owner_id` | bigint unsigned | no | | FK → `users.id`, `ON DELETE RESTRICT` |
+| `project_id` | bigint unsigned | yes | | FK → `projects.id`, `ON DELETE SET NULL` |
+| `project_name` | varchar(150) | no | | As imported, kept if the project goes |
+| `file` | varchar(255) | no | | The JSON file's name |
+| `sha256` | char(64) | no | | The file's content hash |
+| `counts` | json | no | | Per building: floors, activities, breaks, actuals; dates and figures checked |
+| `created_at` | timestamp | no | now | |
+
+`UNIQUE (owner_id, sha256)`: the same file cannot be imported twice for one owner.
+
+---
+
 ## users
 
 Standard Laravel, plus:
 
 | Column | Type | Null | Default | Notes |
 | --- | --- | --- | --- | --- |
-| `role` | enum(`admin`,`editor`,`viewer`) | no | `viewer` | |
-| `approved_at` | timestamp | yes | null | Null = cannot sign in |
+| `phone` | varchar(30) | yes | null | Optional, from "My profile" |
 
-New registrations are created with `approved_at = null` and `role = viewer`. An admin approves them. Without
-this, anyone who finds the URL learns the project's handover dates.
-
-| Role | Can do |
-| --- | --- |
-| `viewer` | Read everything |
-| `editor` | Record and change `actual_date` |
-| `admin` | Everything: durations, predecessors, adjustments, project dates, user approval |
-
-The split matters. Changing `offset_days` moves every downstream date; recording an actual date moves nothing.
-Site staff should not be able to reshape the plan by accident.
+There are no roles and no approval (`role` and `approved_at` were dropped by
+`2026_10_25_000011_one_user_owner_only`). An account can do everything with the projects it owns, through
+`projects.owner_id`, and every policy refuses anyone else's with a 404.
 
 ---
 

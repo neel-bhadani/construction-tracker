@@ -20,6 +20,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 #[Fillable([
     'building_id',
+    'floor_id',
     'description',
     'predecessor_id',
     'offset_days',
@@ -52,6 +53,7 @@ class Activity extends Model
     protected function casts(): array
     {
         return [
+            'floor_id' => 'integer',
             'offset_days' => 'integer',
             'date_adjustment_days' => 'integer',
             'is_break' => 'boolean',
@@ -68,6 +70,16 @@ class Activity extends Model
     public function building(): BelongsTo
     {
         return $this->belongsTo(Building::class);
+    }
+
+    /**
+     * The floor it is on; null is the whole building (common work).
+     *
+     * @return BelongsTo<Floor, $this>
+     */
+    public function floor(): BelongsTo
+    {
+        return $this->belongsTo(Floor::class);
     }
 
     /**

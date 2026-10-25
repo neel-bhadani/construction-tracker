@@ -4,12 +4,21 @@ namespace Tests;
 
 use App\Import\ImportUploads;
 use App\Import\ScheduleWorkbook;
+use App\Models\User;
 use Database\Seeders\WorkbookSeeder;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use RuntimeException;
 
 abstract class TestCase extends BaseTestCase
 {
+    /** The account that owns the projects a test sets up; made on first use. */
+    private ?User $owner = null;
+
+    protected function owner(): User
+    {
+        return $this->owner ??= User::factory()->create(['name' => 'The Owner']);
+    }
+
     /**
      * The client's workbooks are not in the repository. Tests that need them are skipped, not
      * failed, where CLIENT_WORKBOOKS_DIR does not hold all three.
@@ -21,11 +30,11 @@ abstract class TestCase extends BaseTestCase
         }
     }
 
-    /** Import the client's project from its workbooks, or skip the test where they are missing. */
+    /** Import the client's project from its workbooks for owner(), or skip the test where they are missing. */
     protected function seedClientWorkbooks(): void
     {
         $this->requireClientWorkbooks();
-        $this->seed(WorkbookSeeder::class);
+        $this->app->make(WorkbookSeeder::class)->setContainer($this->app)->__invoke(['owner' => $this->owner()]);
     }
 
     /**

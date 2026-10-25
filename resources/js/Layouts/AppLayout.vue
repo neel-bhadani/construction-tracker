@@ -1,12 +1,12 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Head, Link, router, usePage } from '@inertiajs/vue3'
-import PendingUsersModal from '@/Components/PendingUsersModal.vue'
 
 /*
  | The CRM's shell, as a top bar rather than a sidebar. Same slate-900 ground,
  | brand mark and user block, so it reads as the same family of software. The
- | project switcher jumps between projects from any page.
+ | project switcher jumps between projects from any page; the user block opens
+ | a small menu with "My profile", "Help" and "Sign out".
  */
 const props = defineProps({
   title: String,
@@ -16,7 +16,14 @@ const props = defineProps({
 const page = usePage()
 const user = computed(() => page.props.auth.user)
 const projects = computed(() => page.props.projects ?? [])
-const showPending = ref(false)
+const menuOpen = ref(false)
+const menu = ref(null)
+
+// closes on a click anywhere outside it, and on Escape
+const closeOutside = event => { if (menu.value && !menu.value.contains(event.target)) menuOpen.value = false }
+const closeOnEscape = event => { if (event.key === 'Escape') menuOpen.value = false }
+onMounted(() => { document.addEventListener('click', closeOutside); document.addEventListener('keydown', closeOnEscape) })
+onBeforeUnmount(() => { document.removeEventListener('click', closeOutside); document.removeEventListener('keydown', closeOnEscape) })
 
 const initials = computed(() => {
   const parts = (user.value?.name ?? '').trim().split(/\s+/).filter(Boolean)
@@ -24,11 +31,6 @@ const initials = computed(() => {
   const first = Array.from(parts[0])[0] ?? ''
   const last = parts.length > 1 ? Array.from(parts[parts.length - 1])[0] ?? '' : ''
   return (first + last).toUpperCase()
-})
-
-const roleLabel = computed(() => {
-  const role = (user.value?.role ?? '').trim()
-  return role ? role.charAt(0).toUpperCase() + role.slice(1) : ''
 })
 
 const switchProject = event => {
@@ -59,21 +61,24 @@ const switchProject = event => {
           </select>
         </label>
 
-        <div v-if="user" class="ml-auto flex items-center gap-3">
-          <button v-if="user.canApproveUsers" type="button"
-                  class="hidden rounded-lg px-3 py-1.5 text-sm font-medium text-slate-300 transition-colors hover:bg-white/5 hover:text-white sm:block"
-                  @click="showPending = true">Pending users</button>
-          <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-700 text-xs font-semibold">
-            {{ initials }}
+        <div v-if="user" ref="menu" class="relative ml-auto">
+          <button type="button" class="flex items-center gap-3 rounded-lg px-2 py-1 transition-colors hover:bg-white/5"
+                  aria-haspopup="menu" :aria-expanded="menuOpen" @click="menuOpen = !menuOpen">
+            <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-700 text-xs font-semibold">
+              {{ initials }}
+            </span>
+            <span class="hidden max-w-[12rem] truncate text-sm font-semibold md:block">{{ user.name }}</span>
+            <span class="text-xs text-slate-400" aria-hidden="true">▾</span>
+          </button>
+          <div v-if="menuOpen" role="menu"
+               class="absolute right-0 mt-2 w-48 overflow-hidden rounded-lg bg-white py-1 text-sm text-slate-700 shadow-lg ring-1 ring-slate-900/10">
+            <div class="truncate border-b border-slate-100 px-4 py-2 text-xs text-slate-500 md:hidden">{{ user.name }}</div>
+            <Link href="/profile" role="menuitem" class="block px-4 py-2 hover:bg-slate-50" @click="menuOpen = false">My profile</Link>
+            <Link href="/help" role="menuitem" class="block px-4 py-2 hover:bg-slate-50" @click="menuOpen = false">Help</Link>
+            <Link href="/logout" method="post" as="button" role="menuitem" class="block w-full px-4 py-2 text-left hover:bg-slate-50">
+              Sign out
+            </Link>
           </div>
-          <div class="hidden min-w-0 leading-tight md:block">
-            <div class="truncate text-sm font-semibold">{{ user.name }}</div>
-            <div class="text-xs text-slate-400">{{ roleLabel }}</div>
-          </div>
-          <Link href="/logout" method="post" as="button"
-                class="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-400 transition-colors hover:bg-white/5 hover:text-white">
-            Sign out
-          </Link>
         </div>
       </div>
     </header>
@@ -83,7 +88,5 @@ const switchProject = event => {
       <h1 v-if="title" class="mb-5 text-xl font-semibold tracking-tight text-slate-900">{{ title }}</h1>
       <slot />
     </main>
-
-    <PendingUsersModal v-if="user?.canApproveUsers" :show="showPending" @close="showPending = false" />
   </div>
 </template>

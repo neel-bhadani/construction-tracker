@@ -2,23 +2,23 @@
 
 namespace App\Console\Commands;
 
-use App\Enums\Role;
 use App\Models\User;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rules\Password;
 
 use function Laravel\Prompts\password;
 use function Laravel\Prompts\text;
 
 /**
- * The first admin, and any admin after it. Never through sign-up: nobody can approve anyone
- * until an admin exists, and an admin must not be something a stranger can request.
+ * An account made from the command line, for when REGISTRATION_OPEN is false. It is the same as
+ * one made at /register: there are no roles to give it.
  */
-class CreateAdmin extends Command
+class CreateUser extends Command
 {
-    protected $signature = 'user:create-admin';
+    protected $signature = 'user:create';
 
-    protected $description = 'Create an approved admin account';
+    protected $description = 'Create an account';
 
     public function handle(): int
     {
@@ -44,13 +44,12 @@ class CreateAdmin extends Command
         Validator::make(compact('name', 'email', 'password'), [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:8'],
+            'password' => ['required', 'string', Password::defaults()],
         ])->validate();
 
-        $user = new User(compact('name', 'email', 'password'));
-        $user->forceFill(['role' => Role::Admin, 'approved_at' => now()])->save();
+        $user = User::create(compact('name', 'email', 'password'));
 
-        $this->info("Admin [{$user->email}] created and approved.");
+        $this->info("Account [{$user->email}] created.");
 
         return self::SUCCESS;
     }

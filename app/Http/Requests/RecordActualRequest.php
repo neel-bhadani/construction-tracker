@@ -2,19 +2,23 @@
 
 namespace App\Http\Requests;
 
-use App\Services\ScheduleDays;
+use App\Http\Requests\Concerns\ValidatesActualDate;
+use App\Models\Activity;
+use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Gate;
 
 /**
- * Recording, changing or clearing an actual date: editor and admin. It records something that
- * happened, so it cannot be in the future (today in the project's timezone) or before the
- * building's actual start.
+ * Recording, changing or clearing an actual date: the quick form on each row. Clearing is always
+ * allowed; a date follows ValidatesActualDate, so a break cannot have one.
  */
 class RecordActualRequest extends FormRequest
 {
-    public function authorize(): bool
+    use ValidatesActualDate;
+
+    public function authorize(): Response
     {
-        return $this->user()->can('recordActual', $this->route('activity'));
+        return Gate::inspect('recordActual', $this->activity());
     }
 
     /**
@@ -23,7 +27,7 @@ class RecordActualRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'actual_date' => ['nullable', 'date_format:Y-m-d', 'before_or_equal:'.$this->today(), 'after_or_equal:'.$this->actualStart()],
+            'actual_date' => [...$this->actualDateRules($this->activity()->building), ...($this->activity()->is_break ? ['prohibited'] : [])],
             'notes' => ['nullable', 'string', 'max:5000'],
         ];
     }
@@ -33,21 +37,11 @@ class RecordActualRequest extends FormRequest
      */
     public function messages(): array
     {
-        return [
-            'actual_date.before_or_equal' => 'The actual date cannot be in the future.',
-            'actual_date.after_or_equal' => 'The actual date cannot be before the building\'s actual start ('.$this->actualStart().').',
-        ];
+        return $this->actualDateMessages($this->activity()->building);
     }
 
-    private function today(): string
+    private function activity(): Activity
     {
-        return ScheduleDays::toDate(ScheduleDays::currentDay(null, $this->route('activity')->building->project->timezone));
-    }
-
-    private function actualStart(): string
-    {
-        $building = $this->route('activity')->building;
-
-        return ($building->actual_start_date ?? $building->planned_start_date)->toDateString();
+        return $this->route('activity');
     }
 }

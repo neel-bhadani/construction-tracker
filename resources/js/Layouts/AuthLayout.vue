@@ -2,7 +2,7 @@
 /*
  | The signed-out pages: the CRM's split screen. The left panel says what the
  | product is and nothing about the project — no figures, no dates. Anyone can
- | load this page, and the schedule is exactly what account approval protects.
+ | load this page, and the schedule is exactly what signing in protects.
  */
 </script>
 

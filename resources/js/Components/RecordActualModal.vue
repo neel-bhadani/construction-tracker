@@ -6,9 +6,10 @@ import FormField from './FormField.vue'
 import { formatDate } from '@/lib/format'
 
 /*
- | Editor and admin. An actual date records something that happened: it cannot
- | be in the future or before the project's actual start. The server enforces
- | both; the date input's min and max only save a round trip.
+ | The quick way to record what happened on site. An actual date cannot be in
+ | the future or before the building's actual start, and a break has none
+ | (the page offers no "Actual" on a break). The server enforces all three;
+ | the date input's min and max only save a round trip.
  */
 const props = defineProps({
   show: Boolean,

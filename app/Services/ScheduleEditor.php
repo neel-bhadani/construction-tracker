@@ -11,6 +11,7 @@ use App\Models\Building;
 use App\Models\BuildingRevision;
 use App\Models\User;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -20,13 +21,16 @@ use Illuminate\Support\Facades\DB;
  */
 class ScheduleEditor
 {
-    /** Fields an admin edits; changing any of the first three moves planned dates. */
-    public const PLAN_FIELDS = ['predecessor_id', 'offset_days', 'date_adjustment_days', 'adjustment_reason', 'description', 'is_break', 'notes'];
+    /** The plan's fields; changing any of the first three moves planned dates. */
+    public const PLAN_FIELDS = ['predecessor_id', 'offset_days', 'date_adjustment_days', 'adjustment_reason', 'description', 'is_break', 'notes', 'floor_id'];
 
     private const CHAIN_FIELDS = ['predecessor_id', 'offset_days', 'date_adjustment_days'];
 
-    /** Fields an editor records; neither moves a planned date. */
+    /** What happened on site; neither moves a planned date. */
     private const ACTUAL_FIELDS = ['actual_date', 'notes'];
+
+    /** What the activity dialog saves: the plan and the actual date. */
+    private const DIALOG_FIELDS = [...self::PLAN_FIELDS, 'actual_date'];
 
     public function __construct(private readonly ScheduleRecalculator $recalculator) {}
 
@@ -35,11 +39,13 @@ class ScheduleEditor
      * memory. Nothing is written. A change that would create a cycle throws the recalculator's
      * ScheduleCycleException, naming the activities in it.
      *
+     * A new activity inserted below $afterId with $push takes over the row below: see pushedRow().
+     *
      * @param  array{predecessor_id: ?int, offset_days: int, date_adjustment_days: int}  $chain
      *
      * @throws InvalidScheduleException
      */
-    public function preview(Building $building, array $chain, ?Activity $activity = null): SchedulePreview
+    public function preview(Building $building, array $chain, ?Activity $activity = null, ?int $afterId = null, bool $push = false): SchedulePreview
     {
         $startDate = $building->planned_start_date;
         $stored = Activity::query()
@@ -56,6 +62,10 @@ class ScheduleEditor
         $proposed->forceFill($chain);
 
         $graph = $stored->map(fn (Activity $row) => clone $row)->put($proposed->id, $proposed);
+        $pushed = $activity === null && $push && $afterId !== null ? $this->pushedRow($stored, $afterId) : null;
+        if ($pushed !== null) {
+            $graph[$pushed->id]->predecessor_id = $proposed->id;
+        }
         $computed = $this->recalculator->compute($graph, $startDate);
 
         $changed = $stored->except($proposed->id)->filter(
@@ -67,30 +77,67 @@ class ScheduleEditor
             changedCount: $changed->count(),
             finishBefore: $stored->max(fn (Activity $row) => $row->planned_date->toDateString()),
             finishAfter: collect($computed)->max('planned_date'),
+            changed: $changed->take(SchedulePreview::LISTED)->map(fn (Activity $row) => [
+                'id' => $row->id,
+                'description' => $row->description,
+                'before' => $row->planned_date->toDateString(),
+                'after' => $computed[$row->id]['planned_date'],
+            ])->values()->all(),
+            pushes: $pushed?->description,
         );
+    }
+
+    /**
+     * "Push the activities after it later": the row directly below $afterId in the list, if that
+     * row comes after $afterId. It is relinked to come after the new activity, so it and everything
+     * chained to it move by the new activity's days. Any other row is left alone.
+     *
+     * @param  Collection<int, Activity>  $rows  keyed by id, in row order
+     */
+    private function pushedRow(Collection $rows, int $afterId): ?Activity
+    {
+        $ids = $rows->keys()->all();
+        $below = $ids[array_search($afterId, $ids, true) + 1] ?? null;
+
+        return $below !== null && $rows[$below]->predecessor_id === $afterId ? $rows[$below] : null;
     }
 
     /**
      * Never a bare Activity::create(): planned_date cannot be null, so the row is written with a
      * placeholder and recalculated in the same transaction.
      *
-     * @param  array<string, mixed>  $data  PLAN_FIELDS
+     * At the end of the list, or right below $afterId. Inserting renumbers every row's position in
+     * the same transaction; with $push the row below is relinked (pushedRow()). Actual dates never
+     * change.
+     *
+     * @param  array<string, mixed>  $data  DIALOG_FIELDS
      */
-    public function create(Building $building, array $data, User $user): Activity
+    public function create(Building $building, array $data, User $user, ?int $afterId = null, bool $push = false): Activity
     {
-        return DB::transaction(function () use ($building, $data, $user) {
-            $last = Activity::where('building_id', $building->id)->lockForUpdate()->max('sort_order');
+        return DB::transaction(function () use ($building, $data, $user, $afterId, $push) {
+            $rows = Activity::where('building_id', $building->id)->orderBy('sort_order')->orderBy('id')->lockForUpdate()
+                ->get(['id', 'description', 'predecessor_id', 'sort_order'])->keyBy('id');
 
             $activity = new Activity($this->normalise($data));
             $activity->building_id = $building->id;
-            $activity->sort_order = $last + 1;
+            $activity->sort_order = $rows->max('sort_order') + 1;
             $activity->forceFill(['planned_day' => 0, 'planned_date' => $building->planned_start_date])->save();
 
             $this->revision($activity, $user, 'created', null, $activity->description);
-            foreach (array_diff(self::PLAN_FIELDS, ['description']) as $field) {
+            foreach (array_diff(self::DIALOG_FIELDS, ['description']) as $field) {
                 $value = $this->value($activity, $field);
                 if (! in_array($value, [null, '0', 'false'], true)) {
                     $this->revision($activity, $user, $field, null, $value);
+                }
+            }
+
+            if ($afterId !== null) {
+                $this->renumber($rows->keys()->all(), $afterId, $activity->id);
+
+                $pushed = $push ? $this->pushedRow($rows, $afterId) : null;
+                if ($pushed !== null) {
+                    $pushed = Activity::findOrFail($pushed->id);
+                    $this->apply($pushed, ['predecessor_id' => $activity->id], ['predecessor_id'], $user);
                 }
             }
 
@@ -101,13 +148,30 @@ class ScheduleEditor
     }
 
     /**
-     * @param  array<string, mixed>  $data  PLAN_FIELDS
+     * Positions 1..n in row order, with the new activity right after $afterId. One statement, and
+     * like the recalculator's it leaves updated_at alone: a position is not an edit to the row.
+     *
+     * @param  list<int>  $ids  the existing rows, in order
+     */
+    private function renumber(array $ids, int $afterId, int $newId): void
+    {
+        $at = array_search($afterId, $ids, true);
+        $order = [...array_slice($ids, 0, $at + 1), $newId, ...array_slice($ids, $at + 1)];
+
+        DB::update(
+            'UPDATE activities SET sort_order = CASE id '.implode(' ', array_fill(0, count($order), 'WHEN ? THEN ?')).' END WHERE id IN ('.implode(', ', array_fill(0, count($order), '?')).')',
+            [...collect($order)->flatMap(fn (int $id, int $index) => [$id, $index + 1]), ...$order],
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $data  DIALOG_FIELDS
      */
     public function update(Activity $activity, array $data, User $user): Activity
     {
         return DB::transaction(function () use ($activity, $data, $user) {
             $activity = Activity::lockForUpdate()->findOrFail($activity->id);
-            $changed = $this->apply($activity, $this->normalise($data), self::PLAN_FIELDS, $user);
+            $changed = $this->apply($activity, $this->normalise($data), self::DIALOG_FIELDS, $user);
 
             if (array_intersect($changed, self::CHAIN_FIELDS) !== []) {
                 $this->recalculator->recalculate($activity->building);
@@ -126,6 +190,17 @@ class ScheduleEditor
         return DB::transaction(function () use ($activity, $actualDate, $notes, $user) {
             $activity = Activity::lockForUpdate()->findOrFail($activity->id);
             $this->apply($activity, ['actual_date' => $actualDate, 'notes' => $notes], self::ACTUAL_FIELDS, $user);
+
+            return $activity->refresh();
+        });
+    }
+
+    /** A floor moves no planned date, so there is no recalculation. */
+    public function moveToFloor(Activity $activity, ?int $floorId, User $user): Activity
+    {
+        return DB::transaction(function () use ($activity, $floorId, $user) {
+            $activity = Activity::lockForUpdate()->findOrFail($activity->id);
+            $this->apply($activity, ['floor_id' => $floorId], ['floor_id'], $user);
 
             return $activity->refresh();
         });

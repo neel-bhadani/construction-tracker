@@ -177,7 +177,7 @@ class WorkbookImportTest extends TestCase
         $before = DB::table('activities')->count();
 
         try {
-            $this->seed(WorkbookSeeder::class);
+            $this->seedClientWorkbooks();
             $this->fail('Expected the second import to be refused.');
         } catch (RuntimeException $exception) {
             $this->assertStringContainsString('already been imported', $exception->getMessage());

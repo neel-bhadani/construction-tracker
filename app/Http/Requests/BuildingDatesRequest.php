@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Validator;
 
 /**
- * A building's start dates: admin only. Moving the actual start after recorded actuals would
+ * A building's start dates. Moving the actual start after recorded actuals would
  * leave those actuals before the start, so it is refused with the activities named.
  */
 class BuildingDatesRequest extends FormRequest

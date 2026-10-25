@@ -2,107 +2,99 @@
 
 namespace Tests\Feature;
 
-use App\Enums\Role;
 use App\Models\Activity;
 use App\Models\Building;
 use App\Models\Project;
 use App\Models\User;
 use App\Policies\ActivityPolicy;
+use App\Policies\BuildingPolicy;
 use App\Policies\ProjectPolicy;
-use App\Policies\UserPolicy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
- * Every role against every ability. These are what will protect the endpoints; a hidden button
- * protects nothing. An unapproved account is refused everything, whatever its role.
+ * Every ability, for the owner and for another account. The owner may do everything; to anyone
+ * else the project, its buildings and their activities do not exist, so the refusal is a 404.
  */
 class PolicyTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** ability => [viewer, editor, admin] */
-    private const MATRIX = [
-        'activity.viewAny' => [true, true, true],
-        'activity.view' => [true, true, true],
-        'activity.recordActual' => [false, true, true],
-        'activity.create' => [false, false, true],
-        'activity.update' => [false, false, true],
-        'activity.delete' => [false, false, true],
-        'project.viewAny' => [true, true, true],
-        'project.view' => [true, true, true],
-        'project.create' => [false, true, true],
-        'project.update' => [false, true, true],
-        'project.delete' => [false, true, true],
-        'building.view' => [true, true, true],
-        'building.create' => [false, true, true],
-        'building.update' => [false, true, true],
-        'building.delete' => [false, true, true],
-        'building.updateDates' => [false, false, true],
-        'user.viewPending' => [false, false, true],
-        'user.approve' => [false, false, true],
+    private const ABILITIES = [
+        'activity.view', 'activity.recordActual', 'activity.create', 'activity.update', 'activity.delete',
+        'project.viewAny', 'project.view', 'project.create', 'project.update', 'project.delete',
+        'building.view', 'building.create', 'building.update', 'building.delete', 'building.updateDates',
     ];
 
+    /** Not about one project: any account may list its own and make a new one. */
+    private const ANY_ACCOUNT = ['project.viewAny', 'project.create'];
+
     /**
-     * @return array<string, array{Role, bool, string, bool}>
+     * @return array<string, array{string, bool}>
      */
     public static function cases(): array
     {
         $cases = [];
-        $roles = [Role::Viewer, Role::Editor, Role::Admin];
-
-        foreach (self::MATRIX as $ability => $allowed) {
-            foreach ($roles as $index => $role) {
-                $cases["{$role->value}: {$ability}"] = [$role, true, $ability, $allowed[$index]];
-                $cases["unapproved {$role->value}: {$ability}"] = [$role, false, $ability, false];
-            }
+        foreach (self::ABILITIES as $ability) {
+            $cases["owner: {$ability}"] = [$ability, true];
+            $cases["another account: {$ability}"] = [$ability, false];
         }
 
         return $cases;
     }
 
     #[DataProvider('cases')]
-    public function test_role_against_ability(Role $role, bool $approved, string $ability, bool $expected): void
+    public function test_ability(string $ability, bool $asOwner): void
     {
-        $factory = User::factory()->role($role);
-        $user = ($approved ? $factory : $factory->unapproved())->create();
-
+        $user = $asOwner ? $this->owner() : User::factory()->create();
         [$subject, $method] = explode('.', $ability);
 
-        $this->assertSame($expected, $user->can($method, $this->argument($subject, $method)), "{$role->value} {$ability}");
+        $response = Gate::forUser($user)->inspect($method, $this->argument($subject, $method));
+
+        if ($asOwner || in_array($ability, self::ANY_ACCOUNT, true)) {
+            $this->assertTrue($response->allowed(), $ability);
+        } else {
+            $this->assertTrue($response->denied(), $ability);
+            $this->assertSame(404, $response->status(), "{$ability} must look like a missing record");
+        }
     }
 
-    public function test_the_matrix_covers_every_policy_method(): void
+    public function test_the_list_covers_every_policy_method(): void
     {
-        $methods = fn (string $policy) => array_values(array_diff(
-            get_class_methods($policy), ['before'],
-        ));
-
         $covered = fn (string $subject) => array_values(array_map(
             fn (string $ability) => explode('.', $ability)[1],
-            array_filter(array_keys(self::MATRIX), fn (string $ability) => str_starts_with($ability, "{$subject}.")),
+            array_filter(self::ABILITIES, fn (string $ability) => str_starts_with($ability, "{$subject}.")),
         ));
+        $methods = fn (string $policy) => array_values(array_diff(get_class_methods($policy), ['owns']));
 
         $this->assertEqualsCanonicalizing($methods(ActivityPolicy::class), $covered('activity'));
         $this->assertEqualsCanonicalizing($methods(ProjectPolicy::class), $covered('project'));
-        $this->assertEqualsCanonicalizing($methods(UserPolicy::class), $covered('user'));
+        $this->assertEqualsCanonicalizing($methods(BuildingPolicy::class), $covered('building'));
     }
 
+    /**
+     * @return mixed the policy's argument list
+     */
     private function argument(string $subject, string $method): mixed
     {
-        return match ($subject) {
-            'activity' => in_array($method, ['viewAny', 'create'], true) ? Activity::class : $this->activity(),
-            'project' => in_array($method, ['viewAny', 'create'], true) ? Project::class : $this->project(),
-            'building' => $method === 'create' ? Building::class : $this->building(),
-            'user' => $method === 'viewPending' ? User::class : User::factory()->unapproved()->create(),
+        return match ("{$subject}.{$method}") {
+            'project.viewAny', 'project.create' => Project::class,
+            'building.create' => [Building::class, $this->project()],
+            'activity.create' => [Activity::class, $this->building()],
+            default => match ($subject) {
+                'project' => $this->project(),
+                'building' => $this->building(),
+                'activity' => $this->activity(),
+            },
         };
     }
 
     private function project(): Project
     {
-        return Project::firstOrCreate(['name' => 'Test project'], ['planned_start_date' => '2026-04-05']);
+        return Project::firstOrCreate(['name' => 'Test project'], ['owner_id' => $this->owner()->id, 'planned_start_date' => '2026-04-05']);
     }
 
     private function building(): Building
@@ -112,10 +104,8 @@ class PolicyTest extends TestCase
 
     private function activity(): Activity
     {
-        $scope = $this->building();
-
         return Activity::findOrFail(DB::table('activities')->insertGetId([
-            'building_id' => $scope->id,
+            'building_id' => $this->building()->id,
             'description' => 'A',
             'planned_date' => '2026-04-05',
         ]));
