@@ -1,58 +1,66 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Shaligram Timeline
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Construction timeline tracker for Shaligram's projects. It replaces the client's Excel workbooks while
+reproducing them exactly: each building's schedule is a dependency graph, its planned dates are recalculated from
+the chain, and progress, pace, forecasts and lead follow the workbook's own formulas.
 
-## About Laravel
+- **Projects** hold **buildings**; a building is one timeline (a tower, or a project's common work).
+- Site staff record actual dates; admins shape the plan; every change is audited.
+- Same family as the Shaligram CRM: Laravel 13, Inertia, Vue 3, MySQL 8, Tailwind 4.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+Design and schema: [`docs/system-design.md`](docs/system-design.md) and
+[`docs/database-structure.md`](docs/database-structure.md).
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
-
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
-
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+## Setup
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+composer install
+npm install && npm run build
+cp .env.example .env && php artisan key:generate   # then set DB_* and MAIL_*
+php artisan migrate
+php artisan db:seed --class=WorkbookSeeder          # Shaligram Vrundavan: Tower A, Tower B, Overall Timeline
+php artisan user:create-admin                        # the first admin; never through sign-up
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+`WorkbookSeeder` parses the plan from the formulas in `docs/workbooks/` and refuses to finish unless every one of
+the 151 computed dates equals the workbook's own cell.
 
-## Contributing
+## Roles
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Global, approved by an admin after sign-up (`/signup`). Accounts start as viewers.
 
-## Code of Conduct
+| Role | Can |
+| --- | --- |
+| viewer | Read everything |
+| editor | Record and change actual dates and notes; add, edit and delete projects; add buildings (empty, copied or imported from Excel), rename, reorder and delete them |
+| admin | Everything: durations, predecessors, adjustments, a building's start dates, approving users. Roles are changed in the database for now; there is no screen for it yet |
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+Every endpoint is checked by a policy; buttons are only hidden to match.
 
-## Security Vulnerabilities
+## Pages
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+| Address | Page |
+| --- | --- |
+| `/projects` | Home: every project with % done, most-behind building, expected handover |
+| `/projects/{id}` | One project: a card per building, add / edit / reorder / delete buildings |
+| `/projects/{id}/buildings/{id}` | The building's timeline: status, activity table, record actual, edit plan with a preview of what moves |
 
-## License
+## Settings worth knowing
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+- `APP_TIMEZONE` (default `Asia/Kolkata`); each project also has its own timezone, which decides "today".
+- Password reset mail: `MAIL_MAILER=log` locally. Production needs a real mailer, a `MAIL_FROM_ADDRESS` on a domain
+  with SPF/DKIM/DMARC, and `APP_URL` set to the real HTTPS address.
+- Excel uploads are held in `storage/app/private/imports` for at most an hour.
+
+## Tests
+
+```bash
+php artisan test
+```
+
+Tests run on MySQL against `construction_tracker_test` only; `tests/TestCase.php` refuses any other database,
+because `RefreshDatabase` wipes whatever it points at. The workbooks are the test oracle: the import proof and
+`WorkbookMetricsTest` compare every figure with Excel's cached values.
+
+`php artisan workbook:document` regenerates the seed-data section of `docs/database-structure.md`;
+`WorkbookDocumentTest` fails if it drifts from the workbooks.

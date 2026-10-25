@@ -36,6 +36,9 @@ the duplication the application removes.
 
 ---
 
+> In the application each scope is a **building** of a project — Tower A and Tower B as buildings, Overall
+> Timeline as the project's common work. Section 9 describes the project and building level.
+
 ## 2. The data model hidden in the formulas
 
 The activity sheet looks like a flat table but is a **dependency graph**. Every row's day offset is computed
@@ -80,7 +83,7 @@ workbook's "planned work-days completed" is the furthest completed row's day num
 
 Every number below is computed, never stored. These are the client's definitions, taken from the formulas in each
 scope's Chart and Lead Tracker sheets — not improved versions. The formulas are identical across all three scopes.
-`ScopeMetricsService` and `LeadProjectionService` implement them, and `WorkbookMetricsTest` compares every figure
+`BuildingMetricsService` and `LeadProjectionService` implement them, and `WorkbookMetricsTest` compares every figure
 for all three scopes with Excel's cached values (2,204 figures, clock frozen at 2026-10-15, the date the
 workbooks were last calculated).
 
@@ -293,8 +296,12 @@ PostCSS). Same component conventions, same modal patterns, same table styling.
 | Layer | Responsibility |
 | --- | --- |
 | `ScheduleRecalculator` | Walks the predecessor graph for one scope, writes `planned_day` and `planned_date`. The only writer of those two columns. |
-| `ScopeMetricsService` | Progress, pace, the three forecasts, current lead. Pure functions over loaded activities. |
+| `BuildingMetricsService` | Progress, pace, the three forecasts, current lead. Pure functions over loaded activities. |
 | `LeadProjectionService` | Applies a lead (current or what-if) to pending activities. |
+| `ScheduleEditor` | Every user change to activities and to a building's start dates: one transaction, one audit row per changed field, recalculation when dates can move. |
+| `ProjectEditor` | Every user change to projects and buildings: create, edit, reorder, soft delete; a new building's plan empty, copied or imported. Audited. |
+| `PlanWriter` | Writes a whole plan into a building — the workbook seeder, a copied plan, an Excel import — and recalculates it. |
+| `ProjectSummaryService` | A project across its buildings: work-day-weighted % done, most behind, expected handover. Combines BuildingMetricsService output; computes nothing new per building. |
 | Controllers | Thin. Validate, call a service, return an Inertia response. |
 | Form requests | All validation, including the cycle check. |
 
@@ -335,7 +342,10 @@ migration's proof.
 
 ---
 
-## 7. The three pages
+## 7. The pages
+
+Section 9 adds the Projects and Project pages; the main page below is now the **building page**, one per
+building, at `/projects/{id}/buildings/{id}`, unchanged apart from its breadcrumb and building selector.
 
 ### Login
 
@@ -388,10 +398,11 @@ Stop after each stage.
    real Tower A chain as the fixture.
 3. **Import and prove it.** Seed all three scopes from the workbook, then assert every computed `planned_date`
    equals the workbook's cell. Any mismatch fails the build. Do not continue until all 151 activities match.
-4. **`ScopeMetricsService`.** Progress, pace, the three forecasts, current lead.
+4. **`BuildingMetricsService`.** Progress, pace, the three forecasts, current lead.
 5. **Auth.** Login, registration with approval, roles, policies.
 6. **Main page.** Status row, activity table, both modals, recalculation preview on save.
 7. **Charts and what-if.** S-curve with projections, zoom toggle, lead input.
+8. **Projects and buildings.** Many projects, many buildings each; the timeline screen and its calculations unchanged.
 
 ### Verification targets
 
@@ -409,3 +420,72 @@ all of them:
 | Overall planned finish | 8 Jul 2028 |
 
 If any of these differ, the port is wrong — not the workbook.
+
+---
+
+## 9. Projects and buildings
+
+The client has several projects, each with several buildings. The timeline screen, its Excel-faithful calculations
+and its audit trail are unchanged; the project and building level sits around them.
+
+### Data
+
+- A **project** has a name (unique among live projects), optional details, a planned start, a timezone and its
+  creator. Its planned start is **only the default for a new building**: changing it moves nothing. Its timezone
+  decides "today" — days since the latest milestone, and the rule that an actual date cannot be in the future.
+- A **building** is one timeline, of type `building` or `common_work`, with its own planned and actual start. Every
+  planned date in it counts from its planned start. Changing that start recalculates that building only.
+- Both are soft-deleted. A project is deleted only once it has no buildings, and the refusal names them. A deleted
+  building's timeline leaves the app; its activities and audit trail stay.
+- The former `scopes` became `buildings` in place, keeping every id, row, actual date and revision. The migration
+  checks its own counts and aborts on any difference; `ProjectsAndBuildingsMigrationTest` runs it against the old
+  schema and compares every row, and again after rolling back and migrating once more.
+
+### Pages
+
+| Page | Address | Shows |
+| --- | --- | --- |
+| Projects (home) | `/projects` | One card per project: buildings, % done, most-behind building and its lead, expected handover. + New project, edit, delete |
+| Project | `/projects/{id}` | A summary line, then one card per building: type, % done, ahead/behind, NEXT activity, expected handover. + Add building, edit, reorder (↑ ↓), delete |
+| Building | `/projects/{id}/buildings/{id}` | The timeline screen of section 7, with the breadcrumb "Projects › Shaligram Vrundavan › Tower A" |
+
+The header carries a project switcher. Links to the old `/scopes/{id}` addresses redirect (301) to the building page.
+
+### The project figures
+
+All three combine `BuildingMetricsService` output; nothing is calculated in a controller or in Vue.
+
+| Figure | Definition |
+| --- | --- |
+| % done | Work-day weighted: the buildings' completed planned days ÷ their total planned days, so a long tower counts for more than a short one. Breaks count, as in each building |
+| Most behind | The building with the lowest current lead. Buildings with no actual date yet are skipped |
+| Expected handover | Per building, the hold-current-lead forecast — the planned finish until the first actual. Per project, the latest of its buildings' |
+
+### Adding a building
+
+A new building's plan starts one of three ways:
+
+- **Empty** — activities are added one by one.
+- **Copy** from any building in any project: the chain, offsets, adjustments with their reasons, and break flags.
+  Not actual dates or notes, which belong to the site they were recorded on. Dates are computed from the new
+  building's own start, so they follow it.
+- **Import from Excel**: upload a workbook laid out like the client's (activities from row 4, start date in `E2`),
+  pick the sheet. The chain is parsed from the formulas, as the seeder does; actual dates are not imported. Day
+  numbers must equal Excel's cached column C, and when the building starts on the workbook's `E2` date every date
+  must equal column D. Any difference, or a formula the parser does not recognise, is refused with the cell named
+  and nothing is written. Uploads are `.xlsx` up to 2 MB, held for an hour under a random token.
+
+Every copied or imported activity gets a `created` revision naming its source.
+
+### Roles
+
+Global, as before; not per project.
+
+| Role | Projects and buildings |
+| --- | --- |
+| viewer | Read everything |
+| editor | Add, edit and delete projects; add buildings (empty, copied, imported); rename, retype, reorder and delete buildings |
+| admin | All of that, and change an existing building's start dates — they move every planned date in it, the same line as offsets and predecessors |
+
+A refusal says why in plain words, e.g. "Your role can view projects but not change them. Ask an editor or admin."
+

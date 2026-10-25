@@ -24,3 +24,20 @@ export async function requestJson(method, url, body) {
 
   return { ok: response.ok, status: response.status, data }
 }
+
+/** A file upload outside Inertia's visits: the Excel import's first step. */
+export async function uploadFile(url, field, file) {
+  const body = new FormData()
+  body.append(field, file)
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-XSRF-TOKEN': xsrfToken() },
+    credentials: 'same-origin',
+    body,
+  })
+
+  const data = await response.json().catch(() => null)
+
+  return { ok: response.ok, status: response.status, data }
+}

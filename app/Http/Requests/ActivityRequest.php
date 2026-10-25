@@ -5,7 +5,7 @@ namespace App\Http\Requests;
 use App\Data\SchedulePreview;
 use App\Http\Requests\Concerns\ValidatesChain;
 use App\Models\Activity;
-use App\Models\Scope;
+use App\Models\Building;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -57,9 +57,9 @@ class ActivityRequest extends FormRequest
         return [...$this->safe()->only(['description', 'adjustment_reason', 'notes']), ...$this->chain(), 'is_break' => $this->boolean('is_break')];
     }
 
-    protected function scope(): Scope
+    protected function building(): Building
     {
-        return $this->route('scope') ?? $this->activity()->scope;
+        return $this->route('building') ?? $this->activity()->building;
     }
 
     protected function activity(): ?Activity

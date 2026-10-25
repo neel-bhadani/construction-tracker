@@ -5,7 +5,7 @@ namespace App\Http\Requests;
 use App\Data\SchedulePreview;
 use App\Http\Requests\Concerns\ValidatesChain;
 use App\Models\Activity;
-use App\Models\Scope;
+use App\Models\Building;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -41,9 +41,9 @@ class ActivityPreviewRequest extends FormRequest
         return $this->chainMessages();
     }
 
-    protected function scope(): Scope
+    protected function building(): Building
     {
-        return $this->route('scope') ?? $this->activity()->scope;
+        return $this->route('building') ?? $this->activity()->building;
     }
 
     protected function activity(): ?Activity

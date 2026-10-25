@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Project;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -46,8 +48,13 @@ class HandleInertiaRequests extends Middleware
                     'name' => $user->name,
                     'email' => $user->email,
                     'role' => $user->role->value,
+                    // decides only whether the header offers the button; the endpoints check the policy
+                    'canApproveUsers' => $user->can('viewPending', User::class),
                 ] : null,
             ],
+
+            // the header's project switcher; Project's soft-delete scope keeps deleted ones out
+            'projects' => $user ? fn () => Project::orderBy('name')->get(['id', 'name']) : [],
 
             // read once in app.js and shown as a toast
             'flash' => [

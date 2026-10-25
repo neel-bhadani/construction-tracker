@@ -19,12 +19,13 @@ final class ScheduleDays
     }
 
     /**
-     * Today's day number: the calendar date in the app timezone (Asia/Kolkata), taken before
+     * Today's day number: the calendar date in the given timezone — a project's, else the app's
+     * (Asia/Kolkata) — taken before
      * anything else. Converting first matters: at 01:00 in Kolkata it is still yesterday in UTC.
      */
-    public static function currentDay(?DateTimeInterface $now = null): int
+    public static function currentDay(?DateTimeInterface $now = null, ?string $timezone = null): int
     {
-        return self::toDay(CarbonImmutable::instance($now ?? CarbonImmutable::now())->setTimezone(config('app.timezone')));
+        return self::toDay(CarbonImmutable::instance($now ?? CarbonImmutable::now())->setTimezone($timezone ?? config('app.timezone')));
     }
 
     public static function toDate(int $day): string

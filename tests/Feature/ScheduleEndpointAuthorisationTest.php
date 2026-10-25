@@ -4,8 +4,8 @@ namespace Tests\Feature;
 
 use App\Enums\Role;
 use App\Models\Activity;
+use App\Models\Building;
 use App\Models\Project;
-use App\Models\Scope;
 use App\Models\User;
 use App\Services\ScheduleRecalculator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -23,7 +23,7 @@ class ScheduleEndpointAuthorisationTest extends TestCase
 
     private Project $project;
 
-    private Scope $scope;
+    private Building $scope;
 
     private int $root;
 
@@ -36,9 +36,9 @@ class ScheduleEndpointAuthorisationTest extends TestCase
         $this->withoutVite();
         $this->travelTo('2026-10-15 12:00');
         $this->project = Project::create(['name' => 'Test project', 'planned_start_date' => '2026-04-05']);
-        $this->scope = Scope::create(['project_id' => $this->project->id, 'name' => 'Tower A']);
-        $this->root = DB::table('activities')->insertGetId(['scope_id' => $this->scope->id, 'description' => 'Root', 'offset_days' => 10, 'planned_date' => '2026-04-05', 'sort_order' => 1]);
-        $this->leaf = DB::table('activities')->insertGetId(['scope_id' => $this->scope->id, 'description' => 'Leaf', 'predecessor_id' => $this->root, 'offset_days' => 5, 'planned_date' => '2026-04-05', 'sort_order' => 2]);
+        $this->scope = Building::create(['project_id' => $this->project->id, 'name' => 'Tower A']);
+        $this->root = DB::table('activities')->insertGetId(['building_id' => $this->scope->id, 'description' => 'Root', 'offset_days' => 10, 'planned_date' => '2026-04-05', 'sort_order' => 1]);
+        $this->leaf = DB::table('activities')->insertGetId(['building_id' => $this->scope->id, 'description' => 'Leaf', 'predecessor_id' => $this->root, 'offset_days' => 5, 'planned_date' => '2026-04-05', 'sort_order' => 2]);
         app(ScheduleRecalculator::class)->recalculate($this->scope);
     }
 
@@ -51,7 +51,7 @@ class ScheduleEndpointAuthorisationTest extends TestCase
         'delete an activity' => [403, 403, 302],
         'preview a new activity' => [403, 403, 200],
         'preview an edit' => [403, 403, 200],
-        'change the project dates' => [403, 403, 302],
+        'change the building dates' => [403, 403, 302],
         'list pending users' => [403, 403, 200],
         'approve a user' => [403, 403, 302],
     ];
@@ -79,14 +79,14 @@ class ScheduleEndpointAuthorisationTest extends TestCase
         $before = $this->snapshot();
 
         $response = match ($endpoint) {
-            'view the page' => $this->actingAs($user)->get("/scopes/{$this->scope->id}"),
+            'view the page' => $this->actingAs($user)->get("/projects/{$this->project->id}/buildings/{$this->scope->id}"),
             'record an actual date' => $this->actingAs($user)->patch("/activities/{$this->root}/actual", ['actual_date' => '2026-04-20', 'notes' => 'Poured']),
-            'add an activity' => $this->actingAs($user)->post("/scopes/{$this->scope->id}/activities", $this->plan()),
+            'add an activity' => $this->actingAs($user)->post("/buildings/{$this->scope->id}/activities", $this->plan()),
             'edit an activity' => $this->actingAs($user)->patch("/activities/{$this->leaf}", $this->plan(['predecessor_id' => $this->root])),
             'delete an activity' => $this->actingAs($user)->delete("/activities/{$this->leaf}"),
-            'preview a new activity' => $this->actingAs($user)->postJson("/scopes/{$this->scope->id}/activities/preview", $this->chain()),
+            'preview a new activity' => $this->actingAs($user)->postJson("/buildings/{$this->scope->id}/activities/preview", $this->chain()),
             'preview an edit' => $this->actingAs($user)->postJson("/activities/{$this->leaf}/preview", $this->chain()),
-            'change the project dates' => $this->actingAs($user)->patch("/projects/{$this->project->id}/dates", ['planned_start_date' => '2026-05-01', 'actual_start_date' => null]),
+            'change the building dates' => $this->actingAs($user)->patch("/projects/{$this->project->id}/buildings/{$this->scope->id}/dates", ['planned_start_date' => '2026-05-01', 'actual_start_date' => null]),
             'list pending users' => $this->actingAs($user)->getJson('/users/pending'),
             'approve a user' => $this->actingAs($user)->patch("/users/{$pending->id}/approve"),
         };
@@ -127,12 +127,12 @@ class ScheduleEndpointAuthorisationTest extends TestCase
 
     public function test_guest_is_sent_to_login_from_every_endpoint(): void
     {
-        $this->get("/scopes/{$this->scope->id}")->assertRedirect('/login');
+        $this->get("/projects/{$this->project->id}/buildings/{$this->scope->id}")->assertRedirect('/login');
         $this->patch("/activities/{$this->root}/actual", [])->assertRedirect('/login');
-        $this->post("/scopes/{$this->scope->id}/activities", [])->assertRedirect('/login');
+        $this->post("/buildings/{$this->scope->id}/activities", [])->assertRedirect('/login');
         $this->post("/activities/{$this->leaf}/preview", [])->assertRedirect('/login');
         $this->delete("/activities/{$this->leaf}")->assertRedirect('/login');
-        $this->patch("/projects/{$this->project->id}/dates", [])->assertRedirect('/login');
+        $this->patch("/projects/{$this->project->id}/buildings/{$this->scope->id}/dates", [])->assertRedirect('/login');
         $this->assertSame(2, Activity::count());
     }
 
@@ -172,6 +172,8 @@ class ScheduleEndpointAuthorisationTest extends TestCase
             'activity_revisions' => DB::table('activity_revisions')->count(),
             'projects' => DB::table('projects')->get()->map(fn ($row) => (array) $row)->all(),
             'project_revisions' => DB::table('project_revisions')->count(),
+            'buildings' => DB::table('buildings')->orderBy('id')->get()->map(fn ($row) => (array) $row)->all(),
+            'building_revisions' => DB::table('building_revisions')->count(),
         ];
     }
 }

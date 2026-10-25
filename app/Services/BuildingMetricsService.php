@@ -3,9 +3,9 @@
 namespace App\Services;
 
 use App\Data\ActivityMetrics;
-use App\Data\ScopeMetrics;
+use App\Data\BuildingMetrics;
 use App\Models\Activity;
-use App\Models\Scope;
+use App\Models\Building;
 use DateTimeInterface;
 use Illuminate\Support\Collection;
 
@@ -16,23 +16,23 @@ use Illuminate\Support\Collection;
  * Pace forecasts read planned_day and ignore date adjustments; the hold-lead forecast reads
  * planned_date and includes them. The two disagree on a nudged row by exactly the nudge.
  */
-class ScopeMetricsService
+class BuildingMetricsService
 {
     private const PACE_FLOOR = 0.01;
 
-    public function forScope(Scope $scope, ?DateTimeInterface $today = null): ScopeMetrics
+    public function forBuilding(Building $building, ?DateTimeInterface $today = null): BuildingMetrics
     {
-        $project = $scope->project()->firstOrFail();
-        $activities = $scope->activities()->orderBy('sort_order')->orderBy('id')->get();
-        $start = ScheduleDays::toDay($project->actual_start_date ?? $project->planned_start_date);
+        $project = $building->project()->withTrashed()->firstOrFail();
+        $activities = $building->activities()->orderBy('sort_order')->orderBy('id')->get();
+        $start = ScheduleDays::toDay($building->actual_start_date ?? $building->planned_start_date);
 
-        return $this->calculate($activities, $start, ScheduleDays::currentDay($today));
+        return $this->calculate($activities, $start, ScheduleDays::currentDay($today, $project->timezone));
     }
 
     /**
      * @param  Collection<int, Activity>  $activities  in row order
      */
-    private function calculate(Collection $activities, int $start, int $today): ScopeMetrics
+    private function calculate(Collection $activities, int $start, int $today): BuildingMetrics
     {
         $rows = $activities->map(fn (Activity $activity) => (object) [
             'activity' => $activity,
@@ -49,7 +49,7 @@ class ScopeMetricsService
         $progress = $total === 0 ? 0.0 : $daysCompleted / $total;                     // C12
 
         if ($latest === null) {
-            return new ScopeMetrics(
+            return new BuildingMetrics(
                 ScheduleDays::toDate($start), $total, $this->date($plannedFinish), null, 0, $progress,
                 null, null, null, null, null, null, null, null, null, null, null, null,
                 $rows->map(fn ($row) => $this->activityMetrics($row, null, null, null, null, null))->values()->all(),
@@ -69,7 +69,7 @@ class ScopeMetricsService
         $recentFinish = $latest + (int) round(($total - $daysCompleted) / $recentPace);   // C27
         $holdLeadFinish = $plannedFinish - $lead;                                          // C29
 
-        return new ScopeMetrics(
+        return new BuildingMetrics(
             actualStartDate: ScheduleDays::toDate($start),
             totalPlannedDays: $total,
             plannedFinish: ScheduleDays::toDate($plannedFinish),

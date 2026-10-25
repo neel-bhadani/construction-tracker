@@ -7,7 +7,7 @@ use App\Http\Requests\ActivityPreviewRequest;
 use App\Http\Requests\ActivityRequest;
 use App\Http\Requests\RecordActualRequest;
 use App\Models\Activity;
-use App\Models\Scope;
+use App\Models\Building;
 use App\Services\ScheduleEditor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -22,9 +22,9 @@ class ActivityController extends Controller
 {
     public function __construct(private readonly ScheduleEditor $editor) {}
 
-    public function store(ActivityRequest $request, Scope $scope): RedirectResponse
+    public function store(ActivityRequest $request, Building $building): RedirectResponse
     {
-        $activity = $this->editor->create($scope, $request->plan(), $request->user());
+        $activity = $this->editor->create($building, $request->plan(), $request->user());
 
         return back()->with('success', "Added [{$activity->description}].");
     }
@@ -64,7 +64,7 @@ class ActivityController extends Controller
     }
 
     /** What a new activity would move, computed without writing. */
-    public function previewNew(ActivityPreviewRequest $request, Scope $scope): JsonResponse
+    public function previewNew(ActivityPreviewRequest $request, Building $building): JsonResponse
     {
         return response()->json($request->preview);
     }

@@ -4,8 +4,8 @@ namespace Tests\Feature;
 
 use App\Enums\Role;
 use App\Models\Activity;
+use App\Models\Building;
 use App\Models\Project;
-use App\Models\Scope;
 use App\Models\User;
 use App\Policies\ActivityPolicy;
 use App\Policies\ProjectPolicy;
@@ -31,8 +31,16 @@ class PolicyTest extends TestCase
         'activity.create' => [false, false, true],
         'activity.update' => [false, false, true],
         'activity.delete' => [false, false, true],
+        'project.viewAny' => [true, true, true],
         'project.view' => [true, true, true],
-        'project.updateDates' => [false, false, true],
+        'project.create' => [false, true, true],
+        'project.update' => [false, true, true],
+        'project.delete' => [false, true, true],
+        'building.view' => [true, true, true],
+        'building.create' => [false, true, true],
+        'building.update' => [false, true, true],
+        'building.delete' => [false, true, true],
+        'building.updateDates' => [false, false, true],
         'user.viewPending' => [false, false, true],
         'user.approve' => [false, false, true],
     ];
@@ -86,7 +94,8 @@ class PolicyTest extends TestCase
     {
         return match ($subject) {
             'activity' => in_array($method, ['viewAny', 'create'], true) ? Activity::class : $this->activity(),
-            'project' => $this->project(),
+            'project' => in_array($method, ['viewAny', 'create'], true) ? Project::class : $this->project(),
+            'building' => $method === 'create' ? Building::class : $this->building(),
             'user' => $method === 'viewPending' ? User::class : User::factory()->unapproved()->create(),
         };
     }
@@ -96,12 +105,17 @@ class PolicyTest extends TestCase
         return Project::firstOrCreate(['name' => 'Test project'], ['planned_start_date' => '2026-04-05']);
     }
 
+    private function building(): Building
+    {
+        return Building::firstOrCreate(['project_id' => $this->project()->id, 'name' => 'Tower A']);
+    }
+
     private function activity(): Activity
     {
-        $scope = Scope::create(['project_id' => $this->project()->id, 'name' => 'Tower A']);
+        $scope = $this->building();
 
         return Activity::findOrFail(DB::table('activities')->insertGetId([
-            'scope_id' => $scope->id,
+            'building_id' => $scope->id,
             'description' => 'A',
             'planned_date' => '2026-04-05',
         ]));

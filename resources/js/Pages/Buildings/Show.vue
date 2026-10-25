@@ -6,12 +6,11 @@ import StatusChip from '@/Components/StatusChip.vue'
 import RecordActualModal from '@/Components/RecordActualModal.vue'
 import ActivityFormModal from '@/Components/ActivityFormModal.vue'
 import ConfirmDialog from '@/Components/ConfirmDialog.vue'
-import PendingUsersModal from '@/Components/PendingUsersModal.vue'
-import ProjectDatesModal from '@/Components/ProjectDatesModal.vue'
+import BuildingDatesModal from '@/Components/BuildingDatesModal.vue'
 import { formatDate, signed, percent, leadWord } from '@/lib/format'
 
 /*
- | One scope at a time. Every figure is the server's — ScopeMetricsService and
+ | One building's timeline. Every figure is the server's — ScopeMetricsService and
  | LeadProjectionService output, passed through as it is. This page lays the
  | three per-row lists side by side by id and formats them; it calculates
  | nothing. The `can` flags only decide what is shown: each endpoint is
@@ -19,8 +18,8 @@ import { formatDate, signed, percent, leadWord } from '@/lib/format'
  */
 const props = defineProps({
   project: Object,
-  scopes: Array,
-  scope: Object,
+  buildings: Array,
+  building: Object,
   metrics: Object,
   projection: Object,
   activities: Array,
@@ -54,8 +53,7 @@ const editing = ref(null)        // a stored row, or {} for a new activity
 const deleting = ref(null)
 const deleteError = ref('')
 const deleteProcessing = ref(false)
-const showPending = ref(false)
-const showProjectDates = ref(false)
+const showBuildingDates = ref(false)
 
 const confirmDelete = () => {
   deleteProcessing.value = true
@@ -75,24 +73,28 @@ const openDelete = row => { deleteError.value = ''; deleting.value = row }
 </script>
 
 <template>
-  <AppLayout :title="scope.name">
-    <template #actions>
-      <button v-if="can.approveUsers" type="button"
-              class="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
-              @click="showPending = true">Pending users</button>
+  <AppLayout :title="building.name" :project-id="project.id">
+    <template #breadcrumb>
+      <nav class="mb-1 text-sm text-slate-500" aria-label="Breadcrumb">
+        <Link href="/projects" class="hover:text-teal-700 hover:underline">Projects</Link>
+        <span class="mx-1.5 text-slate-300">›</span>
+        <Link :href="`/projects/${project.id}`" class="hover:text-teal-700 hover:underline">{{ project.name }}</Link>
+        <span class="mx-1.5 text-slate-300">›</span>
+        <span class="text-slate-700" aria-current="page">{{ building.name }}</span>
+      </nav>
     </template>
 
-    <!-- scope selector: each scope has its own URL, so a link opens the same view -->
+    <!-- building selector: each building has its own URL, so a link opens the same view -->
     <div class="mb-5 flex flex-wrap items-center gap-3">
-      <nav class="flex gap-1 rounded-xl border border-slate-200 bg-white p-1" aria-label="Scope">
-        <Link v-for="s in scopes" :key="s.id" :href="`/scopes/${s.id}`"
+      <nav class="flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-1" aria-label="Building">
+        <Link v-for="b in buildings" :key="b.id" :href="`/projects/${project.id}/buildings/${b.id}`"
               class="rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors"
-              :class="s.id === scope.id ? 'bg-teal-700 text-white' : 'text-slate-600 hover:bg-slate-50'"
-              :aria-current="s.id === scope.id ? 'page' : undefined">{{ s.name }}</Link>
+              :class="b.id === building.id ? 'bg-teal-700 text-white' : 'text-slate-600 hover:bg-slate-50'"
+              :aria-current="b.id === building.id ? 'page' : undefined">{{ b.name }}</Link>
       </nav>
 
       <div class="ml-auto flex gap-2">
-        <button v-if="can.updateProjectDates" class="btn-ghost" @click="showProjectDates = true">Project dates</button>
+        <button v-if="can.updateBuildingDates" class="btn-ghost" @click="showBuildingDates = true">Building dates</button>
         <button v-if="can.manageActivities" class="btn" @click="editing = {}">Add activity</button>
       </div>
     </div>
@@ -211,18 +213,17 @@ const openDelete = row => { deleteError.value = ''; deleting.value = row }
       </div>
     </div>
 
-    <p v-if="!rows.length" class="card p-6 text-sm text-slate-500">This scope has no activities yet.</p>
+    <p v-if="!rows.length" class="card p-6 text-sm text-slate-500">This building has no activities yet.</p>
 
     <RecordActualModal :show="!!recording" :activity="recording" :today="today" :earliest="earliestActual"
                        @close="recording = null" />
-    <ActivityFormModal :show="!!editing" :scope-id="scope.id" :activity="editing?.id ? editing : null"
+    <ActivityFormModal :show="!!editing" :building-id="building.id" :activity="editing?.id ? editing : null"
                        :options="options" @close="editing = null" />
     <ConfirmDialog :show="!!deleting" title="Delete activity" confirm-text="Delete"
                    :processing="deleteProcessing"
                    :message="deleteError || (deleting ? `Delete [${deleting.description}]? Its history is kept in the audit trail.` : '')"
                    @close="deleting = null" @confirm="confirmDelete" />
-    <PendingUsersModal v-if="can.approveUsers" :show="showPending" @close="showPending = false" />
-    <ProjectDatesModal v-if="can.updateProjectDates" :show="showProjectDates" :project="project"
-                       @close="showProjectDates = false" />
+    <BuildingDatesModal v-if="can.updateBuildingDates" :show="showBuildingDates" :project-id="project.id" :building="building"
+                        @close="showBuildingDates = false" />
   </AppLayout>
 </template>

@@ -2,7 +2,7 @@
 
 namespace Tests\Support;
 
-use Database\Seeders\Workbook\ScheduleWorkbook;
+use App\Import\ScheduleWorkbook;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Shared\Date;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;

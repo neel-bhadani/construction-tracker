@@ -7,9 +7,8 @@ use App\Exceptions\ActivityHasDependantsException;
 use App\Exceptions\InvalidScheduleException;
 use App\Models\Activity;
 use App\Models\ActivityRevision;
-use App\Models\Project;
-use App\Models\ProjectRevision;
-use App\Models\Scope;
+use App\Models\Building;
+use App\Models\BuildingRevision;
 use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
@@ -40,11 +39,11 @@ class ScheduleEditor
      *
      * @throws InvalidScheduleException
      */
-    public function preview(Scope $scope, array $chain, ?Activity $activity = null): SchedulePreview
+    public function preview(Building $building, array $chain, ?Activity $activity = null): SchedulePreview
     {
-        $startDate = $scope->project()->firstOrFail()->planned_start_date;
+        $startDate = $building->planned_start_date;
         $stored = Activity::query()
-            ->where('scope_id', $scope->id)
+            ->where('building_id', $building->id)
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get([...ScheduleRecalculator::COLUMNS, 'planned_date'])
@@ -77,16 +76,15 @@ class ScheduleEditor
      *
      * @param  array<string, mixed>  $data  PLAN_FIELDS
      */
-    public function create(Scope $scope, array $data, User $user): Activity
+    public function create(Building $building, array $data, User $user): Activity
     {
-        return DB::transaction(function () use ($scope, $data, $user) {
-            $project = $scope->project()->firstOrFail();
-            $last = Activity::where('scope_id', $scope->id)->lockForUpdate()->max('sort_order');
+        return DB::transaction(function () use ($building, $data, $user) {
+            $last = Activity::where('building_id', $building->id)->lockForUpdate()->max('sort_order');
 
             $activity = new Activity($this->normalise($data));
-            $activity->scope_id = $scope->id;
+            $activity->building_id = $building->id;
             $activity->sort_order = $last + 1;
-            $activity->forceFill(['planned_day' => 0, 'planned_date' => $project->planned_start_date])->save();
+            $activity->forceFill(['planned_day' => 0, 'planned_date' => $building->planned_start_date])->save();
 
             $this->revision($activity, $user, 'created', null, $activity->description);
             foreach (array_diff(self::PLAN_FIELDS, ['description']) as $field) {
@@ -96,7 +94,7 @@ class ScheduleEditor
                 }
             }
 
-            $this->recalculator->recalculate($scope);
+            $this->recalculator->recalculate($building);
 
             return $activity->refresh();
         });
@@ -112,7 +110,7 @@ class ScheduleEditor
             $changed = $this->apply($activity, $this->normalise($data), self::PLAN_FIELDS, $user);
 
             if (array_intersect($changed, self::CHAIN_FIELDS) !== []) {
-                $this->recalculator->recalculate($activity->scope);
+                $this->recalculator->recalculate($activity->building);
             }
 
             return $activity->refresh();
@@ -148,40 +146,41 @@ class ScheduleEditor
 
             // written first, so the foreign key nulls it with the rest of the trail
             $this->revision($activity, $user, 'deleted', $activity->description, null);
-            $scope = $activity->scope;
+            $building = $activity->building;
             $activity->delete();
 
-            $this->recalculator->recalculate($scope);
+            $this->recalculator->recalculate($building);
         });
     }
 
     /**
-     * Either date can move every planned date in the project, so every scope is recalculated.
+     * A building's start dates. The planned start moves every planned date in the building, so it
+     * is recalculated; the actual start moves no planned date but drives average pace.
      */
-    public function updateProjectDates(Project $project, string $plannedStart, ?string $actualStart, User $user): Project
+    public function updateBuildingDates(Building $building, string $plannedStart, ?string $actualStart, User $user, ?string $note = null): Building
     {
-        return DB::transaction(function () use ($project, $plannedStart, $actualStart, $user) {
-            $project = Project::lockForUpdate()->findOrFail($project->id);
+        return DB::transaction(function () use ($building, $plannedStart, $actualStart, $user, $note) {
+            $building = Building::lockForUpdate()->findOrFail($building->id);
             $changed = [];
 
             foreach (['planned_start_date' => $plannedStart, 'actual_start_date' => $actualStart] as $field => $value) {
-                $old = $project->{$field}?->toDateString();
+                $old = $building->{$field}?->toDateString();
                 if ($old !== $value) {
                     $changed[$field] = [$old, $value];
                 }
             }
 
-            $project->fill(['planned_start_date' => $plannedStart, 'actual_start_date' => $actualStart])->save();
+            $building->fill(['planned_start_date' => $plannedStart, 'actual_start_date' => $actualStart])->save();
 
             foreach ($changed as $field => [$old, $new]) {
-                ProjectRevision::create(['project_id' => $project->id, 'user_id' => $user->id, 'field' => $field, 'old_value' => $old, 'new_value' => $new]);
+                BuildingRevision::create(['building_id' => $building->id, 'user_id' => $user->id, 'field' => $field, 'old_value' => $old, 'new_value' => $new, 'note' => $note]);
             }
 
-            if ($changed !== []) {
-                $this->recalculator->recalculateProject($project);
+            if (isset($changed['planned_start_date'])) {
+                $this->recalculator->recalculate($building);
             }
 
-            return $project->refresh();
+            return $building->refresh();
         });
     }
 

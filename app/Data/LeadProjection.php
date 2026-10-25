@@ -3,7 +3,7 @@
 namespace App\Data;
 
 /**
- * The Lead Tracker sheet for one scope. Dates are Y-m-d strings.
+ * The Lead Tracker sheet for one building. Dates are Y-m-d strings.
  */
 final readonly class LeadProjection
 {

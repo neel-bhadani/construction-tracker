@@ -5,7 +5,7 @@ namespace App\Exceptions;
 use RuntimeException;
 
 /**
- * The predecessor graph of a scope cannot be computed. Nothing has been written.
+ * The predecessor graph of a building cannot be computed. Nothing has been written.
  */
 class InvalidScheduleException extends RuntimeException
 {
@@ -19,6 +19,6 @@ class InvalidScheduleException extends RuntimeException
 
     public static function foreignPredecessor(int $activityId, string $description): self
     {
-        return new self("Activity [{$description}] has a predecessor outside its scope.", [$activityId]);
+        return new self("Activity [{$description}] has a predecessor outside its building.", [$activityId]);
     }
 }

@@ -4,7 +4,7 @@ namespace App\Http\Requests\Concerns;
 
 use App\Exceptions\InvalidScheduleException;
 use App\Models\Activity;
-use App\Models\Scope;
+use App\Models\Building;
 use App\Services\ScheduleEditor;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -17,7 +17,7 @@ use Illuminate\Validation\Validator;
  */
 trait ValidatesChain
 {
-    abstract protected function scope(): Scope;
+    abstract protected function building(): Building;
 
     abstract protected function activity(): ?Activity;
 
@@ -29,7 +29,7 @@ trait ValidatesChain
         return [
             'predecessor_id' => [
                 'nullable', 'integer',
-                Rule::exists('activities', 'id')->where('scope_id', $this->scope()->id),
+                Rule::exists('activities', 'id')->where('building_id', $this->building()->id),
                 ...($this->activity() ? [Rule::notIn([$this->activity()->id])] : []),
             ],
             'offset_days' => ['required', 'integer', 'min:0', 'max:65535'],
@@ -43,7 +43,7 @@ trait ValidatesChain
     protected function chainMessages(): array
     {
         return [
-            'predecessor_id.exists' => 'Choose an activity from this scope.',
+            'predecessor_id.exists' => 'Choose an activity from this building.',
             'predecessor_id.not_in' => 'An activity cannot follow itself.',
             'offset_days.min' => 'Offset days cannot be negative: an activity cannot come before the one it follows.',
         ];
@@ -60,7 +60,7 @@ trait ValidatesChain
             }
 
             try {
-                $this->preview = app(ScheduleEditor::class)->preview($this->scope(), $this->chain(), $this->activity());
+                $this->preview = app(ScheduleEditor::class)->preview($this->building(), $this->chain(), $this->activity());
             } catch (InvalidScheduleException $exception) {
                 $validator->errors()->add('predecessor_id', $exception->getMessage());
             }

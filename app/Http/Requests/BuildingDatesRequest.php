@@ -2,19 +2,20 @@
 
 namespace App\Http\Requests;
 
-use App\Models\Activity;
+use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Validator;
 
 /**
- * The project's start dates: admin only. Moving the actual start after recorded actuals would
+ * A building's start dates: admin only. Moving the actual start after recorded actuals would
  * leave those actuals before the start, so it is refused with the activities named.
  */
-class ProjectDatesRequest extends FormRequest
+class BuildingDatesRequest extends FormRequest
 {
-    public function authorize(): bool
+    public function authorize(): Response
     {
-        return $this->user()->can('updateDates', $this->route('project'));
+        return Gate::inspect('updateDates', $this->route('building'));
     }
 
     /**
@@ -39,13 +40,10 @@ class ProjectDatesRequest extends FormRequest
             }
 
             $start = $this->input('actual_start_date') ?: $this->input('planned_start_date');
-            $before = Activity::query()
-                ->join('scopes', 'scopes.id', '=', 'activities.scope_id')
-                ->where('scopes.project_id', $this->route('project')->id)
-                ->where('activities.actual_date', '<', $start)
-                ->orderBy('scopes.sort_order')->orderBy('activities.sort_order')
-                ->get(['scopes.name as scope_name', 'activities.description'])
-                ->map(fn ($row) => "{$row->scope_name}: {$row->description}");
+            $before = $this->route('building')->activities()
+                ->where('actual_date', '<', $start)
+                ->orderBy('sort_order')->orderBy('id')
+                ->pluck('description');
 
             if ($before->isNotEmpty()) {
                 $validator->errors()->add(

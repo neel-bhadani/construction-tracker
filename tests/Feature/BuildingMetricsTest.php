@@ -2,13 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Data\BuildingMetrics;
 use App\Data\LeadProjection;
-use App\Data\ScopeMetrics;
+use App\Models\Building;
 use App\Models\Project;
-use App\Models\Scope;
+use App\Services\BuildingMetricsService;
 use App\Services\LeadProjectionService;
 use App\Services\ScheduleRecalculator;
-use App\Services\ScopeMetricsService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -18,11 +18,11 @@ use Tests\TestCase;
  * Cases the three workbooks never exercise: their actuals are all in row order and few. Planned
  * start is 2026-04-05, so planned day N is 2026-04-05 + N.
  */
-class ScopeMetricsTest extends TestCase
+class BuildingMetricsTest extends TestCase
 {
     use RefreshDatabase;
 
-    private Scope $scope;
+    private Building $scope;
 
     private int $sortOrder = 0;
 
@@ -31,7 +31,7 @@ class ScopeMetricsTest extends TestCase
         parent::setUp();
 
         $project = Project::create(['name' => 'Test project', 'planned_start_date' => '2026-04-05']);
-        $this->scope = Scope::create(['project_id' => $project->id, 'name' => 'Test scope']);
+        $this->scope = Building::create(['project_id' => $project->id, 'name' => 'Test scope']);
         $this->travelTo('2026-10-15');
     }
 
@@ -227,10 +227,10 @@ class ScopeMetricsTest extends TestCase
     public function test_a_today_supplied_in_another_timezone_is_read_as_the_kolkata_date(): void
     {
         $this->activity('A', null, 10, actual: '2026-09-20');
-        $service = app(ScopeMetricsService::class);
+        $service = app(BuildingMetricsService::class);
 
-        $this->assertSame(25, $service->forScope($this->scope, CarbonImmutable::parse('2026-10-14 19:30', 'UTC'))->daysSinceLatestActual);
-        $this->assertSame(24, $service->forScope($this->scope, CarbonImmutable::parse('2026-10-14 18:29', 'UTC'))->daysSinceLatestActual);
+        $this->assertSame(25, $service->forBuilding($this->scope, CarbonImmutable::parse('2026-10-14 19:30', 'UTC'))->daysSinceLatestActual);
+        $this->assertSame(24, $service->forBuilding($this->scope, CarbonImmutable::parse('2026-10-14 18:29', 'UTC'))->daysSinceLatestActual);
     }
 
     public function test_scope_without_activities_is_not_an_error(): void
@@ -244,7 +244,7 @@ class ScopeMetricsTest extends TestCase
     private function activity(string $description, ?int $predecessorId, int $offset, ?string $actual = null, bool $isBreak = false): int
     {
         $id = DB::table('activities')->insertGetId([
-            'scope_id' => $this->scope->id,
+            'building_id' => $this->scope->id,
             'description' => $description,
             'predecessor_id' => $predecessorId,
             'offset_days' => $offset,
@@ -258,9 +258,9 @@ class ScopeMetricsTest extends TestCase
         return $id;
     }
 
-    private function metrics(): ScopeMetrics
+    private function metrics(): BuildingMetrics
     {
-        return app(ScopeMetricsService::class)->forScope($this->scope);
+        return app(BuildingMetricsService::class)->forBuilding($this->scope);
     }
 
     private function projection(?int $whatIfLead = null): LeadProjection

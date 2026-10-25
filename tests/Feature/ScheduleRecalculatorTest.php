@@ -4,8 +4,8 @@ namespace Tests\Feature;
 
 use App\Exceptions\InvalidScheduleException;
 use App\Exceptions\ScheduleCycleException;
+use App\Models\Building;
 use App\Models\Project;
-use App\Models\Scope;
 use App\Services\ScheduleRecalculator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -21,7 +21,7 @@ class ScheduleRecalculatorTest extends TestCase
 
     private Project $project;
 
-    private Scope $scope;
+    private Building $scope;
 
     private int $sortOrder = 0;
 
@@ -30,7 +30,7 @@ class ScheduleRecalculatorTest extends TestCase
         parent::setUp();
 
         $this->project = Project::create(['name' => 'Test project', 'planned_start_date' => '2026-04-05']);
-        $this->scope = Scope::create(['project_id' => $this->project->id, 'name' => 'Tower A']);
+        $this->scope = Building::create(['project_id' => $this->project->id, 'name' => 'Tower A']);
     }
 
     public function test_straight_chain_computes_correctly(): void
@@ -196,7 +196,7 @@ class ScheduleRecalculatorTest extends TestCase
 
     public function test_predecessor_in_another_scope_is_rejected(): void
     {
-        $otherScope = Scope::create(['project_id' => $this->project->id, 'name' => 'Tower B']);
+        $otherScope = Building::create(['project_id' => $this->project->id, 'name' => 'Tower B']);
         $foreign = $this->activity('Tower B activity', null, 10, scopeId: $otherScope->id);
         $this->activity('Points across scopes', $foreign, 10);
 
@@ -208,7 +208,7 @@ class ScheduleRecalculatorTest extends TestCase
 
     public function test_only_planned_columns_of_the_given_scope_are_written(): void
     {
-        $otherScope = Scope::create(['project_id' => $this->project->id, 'name' => 'Tower B']);
+        $otherScope = Building::create(['project_id' => $this->project->id, 'name' => 'Tower B']);
         $other = $this->activity('Tower B activity', null, 10, scopeId: $otherScope->id);
         $mine = $this->activity('Tower A activity', null, 10);
         $before = $this->snapshotAllActivities();
@@ -229,7 +229,7 @@ class ScheduleRecalculatorTest extends TestCase
     private function activity(string $description, ?int $predecessorId, int $offset, int $adjustment = 0, ?int $scopeId = null): int
     {
         return DB::table('activities')->insertGetId([
-            'scope_id' => $scopeId ?? $this->scope->id,
+            'building_id' => $scopeId ?? $this->scope->id,
             'description' => $description,
             'predecessor_id' => $predecessorId,
             'offset_days' => $offset,

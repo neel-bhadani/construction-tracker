@@ -5,8 +5,7 @@ namespace App\Services;
 use App\Exceptions\InvalidScheduleException;
 use App\Exceptions\ScheduleCycleException;
 use App\Models\Activity;
-use App\Models\Project;
-use App\Models\Scope;
+use App\Models\Building;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -14,7 +13,7 @@ use Illuminate\Support\Facades\DB;
 /**
  * The only writer of activities.planned_day and activities.planned_date.
  *
- * Always recomputes the whole scope. Do not make this incremental: a full recompute is simple
+ * Always recomputes the whole building. Do not make this incremental: a full recompute is simple
  * enough to be obviously correct, and correctness is the reason this replaces the spreadsheet.
  */
 class ScheduleRecalculator
@@ -25,13 +24,13 @@ class ScheduleRecalculator
     /**
      * @throws InvalidScheduleException when the graph cannot be computed; nothing is written.
      */
-    public function recalculate(Scope $scope): void
+    public function recalculate(Building $building): void
     {
-        DB::transaction(function () use ($scope) {
-            $startDate = $scope->project()->firstOrFail()->planned_start_date;
+        DB::transaction(function () use ($building) {
+            $startDate = Building::withTrashed()->findOrFail($building->id)->planned_start_date;
 
             $activities = Activity::query()
-                ->where('scope_id', $scope->id)
+                ->where('building_id', $building->id)
                 ->orderBy('sort_order')
                 ->orderBy('id')
                 ->lockForUpdate()
@@ -39,17 +38,6 @@ class ScheduleRecalculator
                 ->keyBy('id');
 
             $this->bulkUpdate(collect($this->compute($activities, $startDate)));
-        });
-    }
-
-    /**
-     * Every scope of a project, in one transaction: a change to the project's start date moves
-     * every planned date in it.
-     */
-    public function recalculateProject(Project $project): void
-    {
-        DB::transaction(function () use ($project) {
-            $project->scopes()->orderBy('sort_order')->orderBy('id')->each(fn (Scope $scope) => $this->recalculate($scope));
         });
     }
 

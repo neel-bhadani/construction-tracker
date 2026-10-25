@@ -7,8 +7,8 @@ use Illuminate\Foundation\Http\FormRequest;
 
 /**
  * Recording, changing or clearing an actual date: editor and admin. It records something that
- * happened, so it cannot be in the future (today is the Kolkata date) or before the project's
- * actual start.
+ * happened, so it cannot be in the future (today in the project's timezone) or before the
+ * building's actual start.
  */
 class RecordActualRequest extends FormRequest
 {
@@ -35,19 +35,19 @@ class RecordActualRequest extends FormRequest
     {
         return [
             'actual_date.before_or_equal' => 'The actual date cannot be in the future.',
-            'actual_date.after_or_equal' => 'The actual date cannot be before the project\'s actual start ('.$this->actualStart().').',
+            'actual_date.after_or_equal' => 'The actual date cannot be before the building\'s actual start ('.$this->actualStart().').',
         ];
     }
 
     private function today(): string
     {
-        return ScheduleDays::toDate(ScheduleDays::currentDay());
+        return ScheduleDays::toDate(ScheduleDays::currentDay(null, $this->route('activity')->building->project->timezone));
     }
 
     private function actualStart(): string
     {
-        $project = $this->route('activity')->scope->project;
+        $building = $this->route('activity')->building;
 
-        return ($project->actual_start_date ?? $project->planned_start_date)->toDateString();
+        return ($building->actual_start_date ?? $building->planned_start_date)->toDateString();
     }
 }

@@ -1,7 +1,9 @@
 <?php
 
-namespace Database\Seeders\Workbook;
+namespace App\Import;
 
+use App\Models\Building;
+use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Shared\Date;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
@@ -42,12 +44,30 @@ class ScheduleWorkbook
         return base_path('docs/workbooks');
     }
 
+    /** One of the client's three workbooks, as the seeder imports it. */
     public static function read(string $scope): self
     {
-        $sheet = IOFactory::createReader('Xlsx')
-            ->load(self::directory().'/'.self::SOURCES[$scope])
-            ->getSheetByName($scope)
-            ?? throw new UnexpectedValueException("Sheet [{$scope}] not found in ".self::SOURCES[$scope].'.');
+        return self::readFile(self::directory().'/'.self::SOURCES[$scope], $scope, $scope);
+    }
+
+    /**
+     * Any workbook laid out like the client's: activities from row 4 until column B is empty,
+     * the start date in E2. Formulas are parsed, never evaluated.
+     *
+     * @throws UnexpectedValueException naming the cell when the layout or a formula is not recognised
+     */
+    public static function readFile(string $path, string $sheetName, ?string $label = null): self
+    {
+        $reader = IOFactory::createReader('Xlsx');
+
+        if (! in_array($sheetName, $reader->listWorksheetNames($path), true)) {
+            throw new UnexpectedValueException("The workbook has no sheet named [{$sheetName}].");
+        }
+
+        $reader->setLoadSheetsOnly([$sheetName]);
+
+        $sheet = $reader->load($path)->getSheetByName($sheetName)
+            ?? throw new UnexpectedValueException("The workbook has no sheet named [{$sheetName}].");
 
         $activities = [];
 
@@ -55,7 +75,70 @@ class ScheduleWorkbook
             $activities[$row] = self::activity($sheet, $row);
         }
 
-        return new self($scope, self::date($sheet->getCell('E2')->getValue(), "{$scope}!E2"), $activities);
+        if ($activities === []) {
+            throw new UnexpectedValueException("Sheet [{$sheetName}] has no activities: B".self::FIRST_ROW.' is empty.');
+        }
+
+        return new self($label ?? $sheetName, self::date($sheet->getCell('E2')->getValue(), "{$sheetName}!E2"), $activities);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function sheetNames(string $path): array
+    {
+        return IOFactory::createReader('Xlsx')->listWorksheetNames($path);
+    }
+
+    /**
+     * The plan in the shape PlanWriter writes, keyed by workbook row.
+     *
+     * @return array<int, array{description: string, predecessor: ?int, offset_days: int, date_adjustment_days: int, adjustment_reason: ?string, is_break: bool, sort_order: int, actual_date: ?string}>
+     */
+    public function plan(bool $withActualDates): array
+    {
+        return array_map(fn (array $activity) => [
+            'description' => $activity['description'],
+            'predecessor' => $activity['predecessor_row'],
+            'offset_days' => $activity['offset_days'],
+            'date_adjustment_days' => $activity['date_adjustment_days'],
+            'adjustment_reason' => $activity['adjustment_reason'],
+            'is_break' => $activity['is_break'],
+            'sort_order' => $activity['row'],
+            'actual_date' => $withActualDates ? $activity['actual_date'] : null,
+        ], $this->activities);
+    }
+
+    /**
+     * Compare a building written from this workbook with Excel's own cached values: column C day
+     * numbers always, column D dates only when the building starts on the workbook's E2 date.
+     *
+     * @return list<string> one line per row that disagrees
+     */
+    public function mismatches(Building $building, bool $compareDates): array
+    {
+        $stored = DB::table('activities')->where('building_id', $building->id)->get()->keyBy('sort_order');
+        $mismatches = [];
+
+        foreach ($this->activities as $row => $activity) {
+            $actual = $stored[$row] ?? null;
+
+            if ($actual === null
+                || (int) $actual->planned_day !== $activity['expected_day']
+                || ($compareDates && $actual->planned_date !== $activity['expected_date'])) {
+                $mismatches[] = sprintf(
+                    '  %s row %d [%s]: expected day %d / %s, computed day %s / %s',
+                    $this->scope, $row, $activity['description'],
+                    $activity['expected_day'], $activity['expected_date'], $actual->planned_day ?? 'missing', $actual->planned_date ?? 'missing',
+                );
+            }
+        }
+
+        if ($stored->count() !== count($this->activities)) {
+            $mismatches[] = "  {$this->scope}: {$stored->count()} activities stored, ".count($this->activities).' in the workbook';
+        }
+
+        return $mismatches;
     }
 
     /**
@@ -68,7 +151,7 @@ class ScheduleWorkbook
         }
 
         if (! preg_match('/^=C(\d+)((?:[+-]\d+)*)$/', (string) $formula, $matches)) {
-            throw new UnexpectedValueException("Unrecognised chain formula in {$cell}: ".var_export($formula, true));
+            throw new UnexpectedValueException("Unrecognised chain formula in {$cell}: ".self::shown($formula));
         }
 
         return [
@@ -80,7 +163,7 @@ class ScheduleWorkbook
     public static function parseAdjustment(mixed $formula, int $row, string $cell): int
     {
         if (! preg_match('/^=E\$2\+C'.$row.'((?:[+-]\d+)*)$/', (string) $formula, $matches)) {
-            throw new UnexpectedValueException("Unrecognised date formula in {$cell}: ".var_export($formula, true));
+            throw new UnexpectedValueException("Unrecognised date formula in {$cell}: ".self::shown($formula));
         }
 
         return self::sumTerms($matches[1]);
@@ -120,6 +203,12 @@ class ScheduleWorkbook
         return preg_match('/(\d+)(?:\s*DAYS)?$/i', $description, $matches) ? (int) $matches[1] : null;
     }
 
+    /** A cell's content as a person reads it in an error message. */
+    private static function shown(mixed $value): string
+    {
+        return $value === null || $value === '' ? 'an empty cell' : var_export($value, true);
+    }
+
     private static function sumTerms(string $terms): int
     {
         preg_match_all('/[+-]\d+/', $terms, $matches);
@@ -139,7 +228,7 @@ class ScheduleWorkbook
     private static function date(mixed $serial, string $cell): string
     {
         if (! is_numeric($serial)) {
-            throw new UnexpectedValueException("Expected a date serial in {$cell}, got ".var_export($serial, true));
+            throw new UnexpectedValueException("Expected a date in {$cell}, found ".self::shown($serial));
         }
 
         return Date::excelToDateTimeObject((float) $serial)->format('Y-m-d');

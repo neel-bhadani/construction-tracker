@@ -4,9 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\Activity;
 use App\Models\ActivityRevision;
-use App\Models\Project;
-use App\Models\ProjectRevision;
-use App\Models\Scope;
+use App\Models\Building;
+use App\Models\BuildingRevision;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Database\Seeders\WorkbookSeeder;
@@ -26,7 +25,7 @@ class ScheduleEditingTest extends TestCase
 
     private User $editor;
 
-    private Scope $towerA;
+    private Building $towerA;
 
     protected function setUp(): void
     {
@@ -36,7 +35,7 @@ class ScheduleEditingTest extends TestCase
         $this->travelTo(CarbonImmutable::parse('2026-10-15 12:00', 'Asia/Kolkata'));
         $this->admin = User::factory()->admin()->create();
         $this->editor = User::factory()->editor()->create();
-        $this->towerA = Scope::where('name', 'Tower A')->sole();
+        $this->towerA = Building::where('name', 'Tower A')->sole();
     }
 
     /* ---------------- recording actual dates ---------------- */
@@ -100,7 +99,7 @@ class ScheduleEditingTest extends TestCase
 
         $moved = array_keys(array_diff_assoc($this->plannedDates(), $before));
         $this->assertGreaterThan(25, count($moved));
-        $this->assertSame('2028-08-12', Activity::where('scope_id', $this->towerA->id)->max('planned_date'));
+        $this->assertSame('2028-08-12', Activity::where('building_id', $this->towerA->id)->max('planned_date'));
         $this->assertSame([['offset_days', '75', '82', $this->admin->id]], $this->revisions($plaster));
         $this->assertSame(1, ActivityRevision::count());
     }
@@ -153,10 +152,10 @@ class ScheduleEditingTest extends TestCase
     public function test_predecessor_must_be_in_the_same_scope_and_not_itself(): void
     {
         $slab = $this->activity('3rd SLAB 15');
-        $towerB = Activity::where('scope_id', Scope::where('name', 'Tower B')->sole()->id)->first();
+        $towerB = Activity::where('building_id', Building::where('name', 'Tower B')->sole()->id)->first();
 
         $this->actingAs($this->admin)->patch("/activities/{$slab->id}", $this->plan($slab, ['predecessor_id' => $towerB->id]))
-            ->assertSessionHasErrors(['predecessor_id' => 'Choose an activity from this scope.']);
+            ->assertSessionHasErrors(['predecessor_id' => 'Choose an activity from this building.']);
         $this->actingAs($this->admin)->patch("/activities/{$slab->id}", $this->plan($slab, ['predecessor_id' => $slab->id]))
             ->assertSessionHasErrors(['predecessor_id' => 'An activity cannot follow itself.']);
     }
@@ -184,7 +183,7 @@ class ScheduleEditingTest extends TestCase
     {
         $handover = $this->activity('FLAT HANDOVER');
 
-        $this->actingAs($this->admin)->post("/scopes/{$this->towerA->id}/activities", [
+        $this->actingAs($this->admin)->post("/buildings/{$this->towerA->id}/activities", [
             'description' => 'SNAG LIST', 'predecessor_id' => $handover->id, 'offset_days' => 14,
             'date_adjustment_days' => 0, 'adjustment_reason' => null, 'is_break' => false, 'notes' => null,
         ])->assertSessionHasNoErrors();
@@ -226,7 +225,7 @@ class ScheduleEditingTest extends TestCase
             [null, 'notes', null, 'Keys ready'],
             [null, 'deleted', 'FLAT HANDOVER', null],
         ], ActivityRevision::orderBy('id')->get()->map(fn ($r) => [$r->activity_id, $r->field, $r->old_value, $r->new_value])->all());
-        $this->assertSame('2028-07-06', Activity::where('scope_id', $this->towerA->id)->max('planned_date'));
+        $this->assertSame('2028-07-06', Activity::where('building_id', $this->towerA->id)->max('planned_date'));
     }
 
     public function test_two_deleted_activities_keep_separate_histories(): void
@@ -250,7 +249,7 @@ class ScheduleEditingTest extends TestCase
     {
         $slab = $this->activity('3rd SLAB 15');
         $this->actingAs($this->admin)->patch("/activities/{$slab->id}", $this->plan($slab, ['offset_days' => 16, 'notes' => 'x']));
-        $this->actingAs($this->admin)->post("/scopes/{$this->towerA->id}/activities", [
+        $this->actingAs($this->admin)->post("/buildings/{$this->towerA->id}/activities", [
             'description' => 'NEW', 'predecessor_id' => null, 'offset_days' => 1,
             'date_adjustment_days' => 0, 'adjustment_reason' => null, 'is_break' => false, 'notes' => null,
         ]);
@@ -259,58 +258,74 @@ class ScheduleEditingTest extends TestCase
         $this->assertSame(0, ActivityRevision::whereColumn('activity_snapshot_id', '!=', 'activity_id')->count());
     }
 
-    /* ---------------- project dates ---------------- */
+    /* ---------------- building dates ---------------- */
 
-    public function test_moving_the_planned_start_recalculates_every_scope_and_is_audited(): void
+    /** A building's planned start moves its own dates, and no other building's. */
+    public function test_moving_a_buildings_planned_start_recalculates_that_building_only_and_is_audited(): void
     {
+        $towerB = Building::where('name', 'Tower B')->sole();
         $before = $this->plannedDates(null);
-        $project = Project::sole();
+        $towerADates = $this->plannedDates();
 
-        $this->actingAs($this->admin)->patch("/projects/{$project->id}/dates", ['planned_start_date' => '2026-04-15', 'actual_start_date' => null])
+        $this->actingAs($this->admin)->patch("/projects/{$this->towerA->project_id}/buildings/{$this->towerA->id}/dates", ['planned_start_date' => '2026-04-15', 'actual_start_date' => null])
             ->assertSessionHasNoErrors();
 
         $after = $this->plannedDates(null);
         $this->assertCount(151, $after);
         foreach ($before as $id => $date) {
-            $this->assertSame(CarbonImmutable::parse($date)->addDays(10)->toDateString(), $after[$id]);
+            $expected = array_key_exists($id, $towerADates) ? CarbonImmutable::parse($date)->addDays(10)->toDateString() : $date;
+            $this->assertSame($expected, $after[$id]);
         }
         $this->assertSame([['planned_start_date', '2026-04-05', '2026-04-15', $this->admin->id]],
-            ProjectRevision::get()->map(fn ($r) => [$r->field, $r->old_value, $r->new_value, $r->user_id])->all());
+            BuildingRevision::where('building_id', $this->towerA->id)->get()->map(fn ($r) => [$r->field, $r->old_value, $r->new_value, $r->user_id])->all());
+        $this->assertSame(0, BuildingRevision::where('building_id', $towerB->id)->count());
         $this->assertSame(0, ActivityRevision::count());
     }
 
     public function test_actual_start_after_recorded_actuals_is_refused_with_them_named(): void
     {
-        $project = Project::sole();
+        $towerB = Building::where('name', 'Tower B')->sole();
 
-        $this->actingAs($this->admin)->patch("/projects/{$project->id}/dates", ['planned_start_date' => '2026-04-05', 'actual_start_date' => '2026-09-25'])
+        $this->actingAs($this->admin)->patch("/projects/{$towerB->project_id}/buildings/{$towerB->id}/dates", ['planned_start_date' => '2026-04-05', 'actual_start_date' => '2026-09-25'])
             ->assertSessionHasErrors('actual_start_date');
 
         $message = session('errors')->first('actual_start_date');
-        $this->assertStringContainsString('Tower A: DAY 1 TO GF SLAB - 180 DAYS', $message);
-        $this->assertStringContainsString('Tower B: 1st SLAB', $message);
+        $this->assertStringContainsString('DAY 1 TO GF SLAB - 150 DAYS', $message);
+        $this->assertStringContainsString('1st SLAB', $message);
         // 5 Oct is after the new start, so it is not named
         $this->assertStringNotContainsString('2nd SLAB', $message);
-        $this->assertNull($project->fresh()->actual_start_date);
-        $this->assertSame(0, ProjectRevision::count());
+        $this->assertNull($towerB->fresh()->actual_start_date);
+        $this->assertSame(0, BuildingRevision::count());
     }
 
-    public function test_setting_the_actual_start_is_audited(): void
+    public function test_setting_the_actual_start_is_audited_and_moves_no_planned_date(): void
     {
-        $project = Project::sole();
+        $before = $this->plannedDates(null);
 
-        $this->actingAs($this->admin)->patch("/projects/{$project->id}/dates", ['planned_start_date' => '2026-04-05', 'actual_start_date' => '2026-05-09'])
+        $this->actingAs($this->admin)->patch("/projects/{$this->towerA->project_id}/buildings/{$this->towerA->id}/dates", ['planned_start_date' => '2026-04-05', 'actual_start_date' => '2026-05-09'])
             ->assertSessionHasNoErrors();
 
-        $this->assertSame('2026-05-09', $project->fresh()->actual_start_date->toDateString());
-        $this->assertSame([['actual_start_date', null, '2026-05-09']], ProjectRevision::get()->map(fn ($r) => [$r->field, $r->old_value, $r->new_value])->all());
+        $this->assertSame('2026-05-09', $this->towerA->fresh()->actual_start_date->toDateString());
+        $this->assertSame([['actual_start_date', null, '2026-05-09']], BuildingRevision::get()->map(fn ($r) => [$r->field, $r->old_value, $r->new_value])->all());
+        $this->assertSame($before, $this->plannedDates(null));
+    }
+
+    public function test_editor_cannot_change_a_buildings_start_dates(): void
+    {
+        $before = $this->plannedDates(null);
+
+        $this->actingAs($this->editor)->patch("/projects/{$this->towerA->project_id}/buildings/{$this->towerA->id}/dates", ['planned_start_date' => '2026-04-15', 'actual_start_date' => null])
+            ->assertForbidden();
+
+        $this->assertSame($before, $this->plannedDates(null));
+        $this->assertSame(0, BuildingRevision::count());
     }
 
     /* ---------------- helpers ---------------- */
 
-    private function activity(string $description, ?Scope $scope = null): Activity
+    private function activity(string $description, ?Building $scope = null): Activity
     {
-        return Activity::where('scope_id', ($scope ?? $this->towerA)->id)->where('description', $description)->sole();
+        return Activity::where('building_id', ($scope ?? $this->towerA)->id)->where('description', $description)->sole();
     }
 
     /**
@@ -334,11 +349,11 @@ class ScheduleEditingTest extends TestCase
     /**
      * @return array<int, string>
      */
-    private function plannedDates(?Scope $scope = null): array
+    private function plannedDates(?Building $scope = null): array
     {
         $query = DB::table('activities')->orderBy('id');
         if (func_num_args() === 0) {
-            $query->where('scope_id', $this->towerA->id);
+            $query->where('building_id', $this->towerA->id);
         }
 
         return $query->pluck('planned_date', 'id')->all();

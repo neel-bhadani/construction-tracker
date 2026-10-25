@@ -3,7 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Activity;
-use App\Models\Scope;
+use App\Models\Building;
 use App\Models\User;
 use Database\Seeders\WorkbookSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -20,7 +20,7 @@ class SchedulePreviewTest extends TestCase
 
     private User $admin;
 
-    private Scope $towerA;
+    private Building $towerA;
 
     protected function setUp(): void
     {
@@ -28,7 +28,7 @@ class SchedulePreviewTest extends TestCase
 
         $this->seed(WorkbookSeeder::class);
         $this->admin = User::factory()->admin()->create();
-        $this->towerA = Scope::where('name', 'Tower A')->sole();
+        $this->towerA = Building::where('name', 'Tower A')->sole();
     }
 
     public function test_preview_writes_nothing(): void
@@ -37,7 +37,7 @@ class SchedulePreviewTest extends TestCase
         $before = $this->snapshot();
 
         $this->actingAs($this->admin)->postJson("/activities/{$plaster->id}/preview", $this->chain($plaster, ['offset_days' => 82]))->assertOk();
-        $this->actingAs($this->admin)->postJson("/scopes/{$this->towerA->id}/activities/preview", ['predecessor_id' => $plaster->id, 'offset_days' => 5, 'date_adjustment_days' => 0])->assertOk();
+        $this->actingAs($this->admin)->postJson("/buildings/{$this->towerA->id}/activities/preview", ['predecessor_id' => $plaster->id, 'offset_days' => 5, 'date_adjustment_days' => 0])->assertOk();
 
         $this->assertSame($before, $this->snapshot());
     }
@@ -74,7 +74,7 @@ class SchedulePreviewTest extends TestCase
         $handover = $this->activity('FLAT HANDOVER');
 
         $this->actingAs($this->admin)
-            ->postJson("/scopes/{$this->towerA->id}/activities/preview", ['predecessor_id' => $handover->id, 'offset_days' => 14, 'date_adjustment_days' => 0])
+            ->postJson("/buildings/{$this->towerA->id}/activities/preview", ['predecessor_id' => $handover->id, 'offset_days' => 14, 'date_adjustment_days' => 0])
             ->assertOk()
             ->assertExactJson(['plannedDate' => '2028-08-19', 'changedCount' => 0, 'finishBefore' => '2028-08-05', 'finishAfter' => '2028-08-19']);
     }
@@ -108,7 +108,7 @@ class SchedulePreviewTest extends TestCase
 
     private function activity(string $description): Activity
     {
-        return Activity::where('scope_id', $this->towerA->id)->where('description', $description)->sole();
+        return Activity::where('building_id', $this->towerA->id)->where('description', $description)->sole();
     }
 
     /**
@@ -130,7 +130,7 @@ class SchedulePreviewTest extends TestCase
      */
     private function plannedDates(): array
     {
-        return DB::table('activities')->where('scope_id', $this->towerA->id)->orderBy('id')->pluck('planned_date', 'id')->all();
+        return DB::table('activities')->where('building_id', $this->towerA->id)->orderBy('id')->pluck('planned_date', 'id')->all();
     }
 
     /**

@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * One node in a scope's dependency graph.
+ * One node in a building's dependency graph.
  *
  * planned_day and planned_date are derived and written only by ScheduleRecalculator. They are
  * deliberately not fillable, and must not gain mutators, observers or model events. Create
@@ -16,10 +16,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * transaction, never with a bare Activity::create().
  *
  * predecessor_id is ON DELETE RESTRICT: an activity with dependants cannot be deleted, and
- * deleting its scope fails while the chain is intact. See Scope.
+ * hard-deleting its building fails while the chain is intact. See Building.
  */
 #[Fillable([
-    'scope_id',
+    'building_id',
     'description',
     'predecessor_id',
     'offset_days',
@@ -32,6 +32,18 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 ])]
 class Activity extends Model
 {
+    /**
+     * Route binding skips activities whose building has been deleted: its timeline has left the
+     * app, so its rows cannot be edited by URL either.
+     *
+     * @param  mixed  $value
+     * @param  string|null  $field
+     */
+    public function resolveRouteBinding($value, $field = null): ?self
+    {
+        return $this->where($field ?? $this->getRouteKeyName(), $value)->whereHas('building')->first();
+    }
+
     /**
      * Get the attributes that should be cast.
      *
@@ -51,11 +63,11 @@ class Activity extends Model
     }
 
     /**
-     * @return BelongsTo<Scope, $this>
+     * @return BelongsTo<Building, $this>
      */
-    public function scope(): BelongsTo
+    public function building(): BelongsTo
     {
-        return $this->belongsTo(Scope::class);
+        return $this->belongsTo(Building::class);
     }
 
     /**

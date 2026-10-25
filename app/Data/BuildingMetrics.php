@@ -3,12 +3,12 @@
 namespace App\Data;
 
 /**
- * The Chart sheet's status, pace and forecast figures for one scope. Dates are Y-m-d strings.
+ * The Chart sheet's status, pace and forecast figures for one building. Dates are Y-m-d strings.
  *
  * Figures that need an actual date are null until one exists, where Excel shows #N/A or a
  * meaningless value. previousActual and daysCompletedAtPrevious are null where Excel shows 0.
  */
-final readonly class ScopeMetrics
+final readonly class BuildingMetrics
 {
     /**
      * @param  list<ActivityMetrics>  $activities  in row order

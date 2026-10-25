@@ -10,59 +10,79 @@ MySQL 8, InnoDB, `utf8mb4_unicode_ci`.
 
 ## Overview
 
-Six tables, plus `users`.
+Many projects, each with many buildings. Seven tables, plus `users`.
 
 ```
-projects ──< scopes ──< activities ──< activity_revisions
-   │                        │                   │
-   │                        └── predecessor_id ─┘ (self-reference)
-   └──< project_revisions                         users ──< activity_revisions
-                                                  users ──< project_revisions
+projects ──< buildings ──< activities ──< activity_revisions
+   │             │              │                   │
+   │             │              └── predecessor_id ─┘ (self-reference)
+   │             └──< building_revisions
+   └──< project_revisions                            users ──< every *_revisions table
 ```
+
+A **building** is one timeline: a tower, or a project's common (site-wide) work. Each has its own activities,
+durations and start dates; common work is a peer of the buildings, never a roll-up of them.
 
 The schedule is a **directed acyclic graph**, not a list. `activities.predecessor_id` points at another activity
-in the same scope. A flat "previous row + duration" model is wrong and will produce incorrect dates from the
+in the same building. A flat "previous row + duration" model is wrong and will produce incorrect dates from the
 first branch onward.
 
 ---
 
 ## projects
 
-One row per construction project. Currently one: Shaligram Vrundavan.
+One row per client project. The first is Shaligram Vrundavan.
 
 | Column | Type | Null | Default | Notes |
 | --- | --- | --- | --- | --- |
 | `id` | bigint unsigned, auto | no | | PK |
-| `name` | varchar(150) | no | | |
-| `planned_start_date` | date | no | | The workbook's `START DT` — 2026-04-05 |
-| `actual_start_date` | date | yes | null | Falls back to `planned_start_date`. Drives average pace |
+| `name` | varchar(150) | no | | Unique among projects that are not deleted |
+| `details` | text | yes | null | Free text |
+| `planned_start_date` | date | no | | **Only the default start of a new building.** Changing it moves nothing |
+| `timezone` | varchar(64) | no | `Asia/Kolkata` | Decides "today" for the project's buildings |
+| `created_by` | bigint unsigned | yes | null | FK → `users.id`, `ON DELETE SET NULL`. Null for the migrated project |
 | `created_at` | timestamp | yes | | |
 | `updated_at` | timestamp | yes | | |
+| `deleted_at` | timestamp | yes | null | Soft delete |
+| `active_name` | varchar(150), generated | yes | | `IF(deleted_at IS NULL, name, NULL)`, stored |
 
-Changing either date triggers a full recalculation of every scope in the project.
+`UNIQUE (active_name)`. MySQL lets any number of NULLs share a unique index, so a plain `UNIQUE (name, deleted_at)`
+would not stop two live projects sharing a name; the generated column does, and frees a deleted project's name.
+
+A project is deleted only once it has no buildings; the refusal names them.
 
 ---
 
-## scopes
+## buildings
 
-One row per timeline. Three: Tower A, Tower B, Overall Timeline.
+One row per timeline. Shaligram Vrundavan has three: Tower A and Tower B (`building`), Overall Timeline
+(`common_work`). This is the former `scopes` table, renamed in place, so every id is unchanged.
 
 | Column | Type | Null | Default | Notes |
 | --- | --- | --- | --- | --- |
 | `id` | bigint unsigned, auto | no | | PK |
 | `project_id` | bigint unsigned | no | | FK → `projects.id`, `ON DELETE CASCADE` |
-| `name` | varchar(100) | no | | |
-| `sort_order` | smallint unsigned | no | 0 | Display order of the scope selector |
+| `name` | varchar(100) | no | | Unique per project among buildings that are not deleted |
+| `type` | enum(`building`,`common_work`) | no | `building` | |
+| `planned_start_date` | date | no | | The building's start: every planned date counts from it. Defaults to the project's |
+| `actual_start_date` | date | yes | null | Falls back to `planned_start_date`. Drives average pace |
+| `sort_order` | smallint unsigned | no | 0 | Order on the project page and in the building selector |
 | `created_at` | timestamp | yes | | |
 | `updated_at` | timestamp | yes | | |
+| `deleted_at` | timestamp | yes | null | Soft delete: the timeline leaves the app, its rows and audit trail stay |
+| `active_name` | varchar(100), generated | yes | | `IF(deleted_at IS NULL, name, NULL)`, stored |
 
 Constraints:
 
-- `UNIQUE (project_id, name)`
+- `UNIQUE (project_id, active_name)`
 - Index on `(project_id, sort_order)`
 
-**Overall Timeline is a peer, not a roll-up.** It holds its own 47 activities with their own durations. Never
-compute it from the two towers.
+Changing `planned_start_date` recalculates that building, and only that building. It is admin-only: it moves every
+planned date in the building.
+
+A deleted building's activities are not reachable by URL: activity route binding skips rows whose building is
+deleted. A hard delete would fail while the predecessor chain is intact (RESTRICT on `activities.predecessor_id`);
+null `predecessor_id` across the building first, in one transaction.
 
 ---
 
@@ -73,7 +93,7 @@ The core table. One row per activity, including holiday breaks.
 | Column | Type | Null | Default | Notes |
 | --- | --- | --- | --- | --- |
 | `id` | bigint unsigned, auto | no | | PK |
-| `scope_id` | bigint unsigned | no | | FK → `scopes.id`, `ON DELETE CASCADE` |
+| `building_id` | bigint unsigned | no | | FK → `buildings.id`, `ON DELETE CASCADE`. Formerly `scope_id` |
 | `description` | varchar(255) | no | | e.g. `3rd SLAB 15` |
 | `predecessor_id` | bigint unsigned | yes | null | FK → `activities.id`, `ON DELETE RESTRICT`. Null = chain root |
 | `offset_days` | smallint unsigned | no | 0 | Days after the predecessor |
@@ -90,8 +110,8 @@ The core table. One row per activity, including holiday breaks.
 
 Indexes:
 
-- `(scope_id, sort_order)` — the table view
-- `(scope_id, actual_date)` — progress and pace queries
+- `(building_id, sort_order)` — the table view
+- `(building_id, actual_date)` — progress and pace queries
 - `(predecessor_id)` — dependant lookups and the cycle check
 
 ### Why `sort_order` is separate from the chain
@@ -138,20 +158,42 @@ history of each deleted activity can still be traced on its own; `activity_id` s
 
 ## project_revisions
 
-The same audit trail for the project's dates. Moving `planned_start_date` moves every planned date in the project —
-151 of them — so it is the most consequential change anyone can make, and the most traceable.
+The audit trail for a project: `created`, `deleted`, and each change to `name`, `details`, `planned_start_date` or
+`timezone`. Rows from before buildings existed also record the project's former `actual_start_date`.
 
 | Column | Type | Null | Notes |
 | --- | --- | --- | --- |
 | `id` | bigint unsigned, auto | no | PK |
 | `project_id` | bigint unsigned | no | FK → `projects.id`, `ON DELETE CASCADE` |
 | `user_id` | bigint unsigned | no | FK → `users.id`, `ON DELETE RESTRICT` |
-| `field` | varchar(40) | no | `planned_start_date` or `actual_start_date` |
+| `field` | varchar(40) | no | |
 | `old_value` | text | yes | |
 | `new_value` | text | yes | |
+| `note` | varchar(255) | yes | Why, where the change needs saying |
 | `created_at` | timestamp | no | |
 
 Index on `(project_id, created_at)`.
+
+---
+
+## building_revisions
+
+The audit trail for a building: `created` (the note says whether its plan was copied or imported, and from where),
+`deleted`, and each change to `name`, `type`, `sort_order`, `planned_start_date` or `actual_start_date`. A start-date
+change moves every planned date in the building, so it is the row to look for when a whole timeline shifted.
+
+| Column | Type | Null | Notes |
+| --- | --- | --- | --- |
+| `id` | bigint unsigned, auto | no | PK |
+| `building_id` | bigint unsigned | no | FK → `buildings.id`, `ON DELETE CASCADE` (buildings are soft-deleted, so this never fires in the app) |
+| `user_id` | bigint unsigned | no | FK → `users.id`, `ON DELETE RESTRICT` |
+| `field` | varchar(40) | no | |
+| `old_value` | text | yes | |
+| `new_value` | text | yes | |
+| `note` | varchar(255) | yes | |
+| `created_at` | timestamp | no | |
+
+Index on `(building_id, created_at)`.
 
 ---
 
@@ -184,11 +226,11 @@ Enforced in form requests, not only in the UI.
 
 | Rule | Reason |
 | --- | --- |
-| `predecessor_id` must belong to the same `scope_id` | A cross-scope dependency would make Overall depend on a tower |
+| `predecessor_id` must belong to the same `building_id` | A cross-building dependency would make common work depend on a tower |
 | The predecessor graph must be acyclic | Reject on save, naming the activities in the cycle. Do not rely on a recursion limit |
 | `offset_days` ≥ 0 | Negative would mean an activity precedes what it follows |
 | `adjustment_reason` required when `date_adjustment_days` ≠ 0 | The workbook's nudges were invisible; these must not be |
-| `actual_date` ≥ `project.actual_start_date` | |
+| `actual_date` ≥ the building's `actual_start_date` (else its planned start) | |
 | `actual_date` not in the future | It records something that happened |
 | Deleting an activity with dependants is blocked | Name them. Silently re-pointing rewrites the schedule |
 | Only `admin` may change `offset_days`, `predecessor_id`, `date_adjustment_days` | Policy-enforced, not hidden buttons |
@@ -198,22 +240,23 @@ Enforced in form requests, not only in the UI.
 ## Recalculation contract
 
 Run inside a transaction whenever any of these change: `offset_days`, `predecessor_id`,
-`date_adjustment_days`, an activity is created or deleted, or `projects.planned_start_date` /
-`actual_start_date`.
+`date_adjustment_days`, an activity is created or deleted, the building's `planned_start_date` changes, or a
+plan is copied or imported into a new building. Changing a project's `planned_start_date` moves nothing; changing an
+`actual_start_date` moves no planned date either (it drives pace).
 
 ```
-1. Load all activities for the scope.
+1. Load all activities for the building.
 2. Topologically sort by predecessor_id. Abort and report if a cycle exists.
 3. For each in order:
        planned_day = predecessor ? predecessor.planned_day + offset_days
                                  : offset_days
-4. planned_date = project.planned_start_date
+4. planned_date = building.planned_start_date
                   + planned_day
                   + date_adjustment_days
 5. Bulk update.
 ```
 
-Recalculate the **whole scope**, every time. Fifty-two rows is a few milliseconds. Do not build incremental
+Recalculate the **whole building**, every time. Fifty-two rows is a few milliseconds. Do not build incremental
 updates — a full recompute is simple enough to be obviously correct, and correctness is the entire reason this
 replaces the spreadsheet.
 
@@ -224,7 +267,8 @@ progress, pace and the forecasts, all of which are computed at read time.
 
 ## Seed data
 
-Three scopes, 151 activities, imported by `WorkbookSeeder` from the workbooks in `docs/workbooks/`. The copies of
+One project, Shaligram Vrundavan, with three buildings and 151 activities, imported by `WorkbookSeeder` from the
+workbooks in `docs/workbooks/`: Tower A and Tower B as `building`, Overall Timeline as `common_work`. The copies of
 Tower A and Overall Timeline inside `SV_B3.xlsx` are identical to their own files and are ignored.
 
 **Reproduce the workbook exactly, including its defects.** The chain is parsed from the formulas, never typed:
@@ -236,20 +280,20 @@ edit them by hand — `WorkbookDocumentTest` fails if they disagree with the wor
 
 <!-- generated:seed-data:start — do not edit; run php artisan workbook:document -->
 
-| Scope | Source | Activities | Total planned days | Planned finish |
+| Building | Source | Activities | Total planned days | Planned finish |
 | --- | --- | --- | --- | --- |
 | Tower A | `SV_A3.xlsx` | 52 | 853 | 2028-08-05 |
 | Tower B | `SV_B3.xlsx` | 52 | 843 | 2028-07-26 |
 | Overall Timeline | `SV_Overall3.xlsx` | 47 | 825 | 2028-07-08 |
 
-`projects.planned_start_date` = 2026-04-05 for all three.
+Each building's `planned_start_date` = 2026-04-05, the workbooks' `E2`.
 
 ### Durations where the name and the formula disagree
 
 The duration written at the end of a description, compared with the offset its column C formula
 computes. The formula wins; the description is imported unchanged.
 
-| Scope | Row | Activity | Formula (C) | Named | Imported `offset_days` |
+| Building | Row | Activity | Formula (C) | Named | Imported `offset_days` |
 | --- | --- | --- | --- | --- | --- |
 | Tower A | 7 | `2nd SLAB 20` | `=C5+20+20` | 20 | **40** |
 | Tower A | 24 | `MASONRY 30` | `=C23+30-30` | 30 | **0** |
@@ -279,7 +323,7 @@ Column D formulas that add days on top of `start + C`. Each is imported as `date
 with `adjustment_reason = "carried from original sheet"`. They move that row's
 `planned_date` only, never its `planned_day` or anything downstream.
 
-| Scope | Row | Activity | Formula (D) | `date_adjustment_days` |
+| Building | Row | Activity | Formula (D) | `date_adjustment_days` |
 | --- | --- | --- | --- | --- |
 | Tower A | 6 | `DIWALI (08-11-2026) BREAK 20` | `=E$2+C6+17` | +17 |
 | Tower B | 8 | `DIWALI (08-11-2026) BREAK 20` | `=E$2+C8+12` | +12 |

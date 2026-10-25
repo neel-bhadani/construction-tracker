@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Import\ScheduleWorkbook;
 use App\Models\Project;
-use Database\Seeders\Workbook\ScheduleWorkbook;
 use Database\Seeders\WorkbookSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
@@ -108,10 +108,10 @@ class WorkbookImportTest extends TestCase
     public function test_every_date_adjustment_is_carried_with_its_reason(): void
     {
         $adjusted = DB::table('activities')
-            ->join('scopes', 'scopes.id', '=', 'activities.scope_id')
+            ->join('buildings', 'buildings.id', '=', 'activities.building_id')
             ->where('date_adjustment_days', '!=', 0)
-            ->orderBy('scopes.sort_order')->orderBy('activities.sort_order')
-            ->get(['scopes.name as scope', 'description', 'date_adjustment_days', 'adjustment_reason'])
+            ->orderBy('buildings.sort_order')->orderBy('activities.sort_order')
+            ->get(['buildings.name as scope', 'description', 'date_adjustment_days', 'adjustment_reason'])
             ->map(fn ($row) => [$row->scope, $row->description, (int) $row->date_adjustment_days, $row->adjustment_reason])
             ->all();
 
@@ -231,8 +231,8 @@ class WorkbookImportTest extends TestCase
     private function activities(string $scope)
     {
         return DB::table('activities')
-            ->join('scopes', 'scopes.id', '=', 'activities.scope_id')
-            ->where('scopes.name', $scope)
+            ->join('buildings', 'buildings.id', '=', 'activities.building_id')
+            ->where('buildings.name', $scope)
             ->orderBy('activities.sort_order')
             ->get(['activities.*']);
     }

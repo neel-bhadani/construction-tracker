@@ -2,10 +2,10 @@
 
 namespace Tests\Feature;
 
-use App\Data\ScopeMetrics;
-use App\Models\Scope;
+use App\Data\BuildingMetrics;
+use App\Models\Building;
+use App\Services\BuildingMetricsService;
 use App\Services\LeadProjectionService;
-use App\Services\ScopeMetricsService;
 use Database\Seeders\WorkbookSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -109,9 +109,9 @@ class WorkbookMetricsTest extends TestCase
         $this->assertSame(4.0, $gap('2nd SLAB 20'));
     }
 
-    private function metrics(string $scope): ScopeMetrics
+    private function metrics(string $scope): BuildingMetrics
     {
-        return app(ScopeMetricsService::class)->forScope(Scope::where('name', $scope)->sole());
+        return app(BuildingMetricsService::class)->forBuilding(Building::where('name', $scope)->sole());
     }
 
     /**

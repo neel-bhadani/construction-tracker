@@ -14,9 +14,9 @@ import { requestJson } from '@/lib/http'
  */
 const props = defineProps({
   show: Boolean,
-  scopeId: Number,
+  buildingId: Number,
   activity: Object,     // the stored fields, or null to add one
-  options: Array,       // [{ id, description }] — this scope only
+  options: Array,       // [{ id, description }] — this building only
 })
 const emit = defineEmits(['close'])
 
@@ -67,7 +67,7 @@ function schedulePreview() {
 
 async function fetchPreview() {
   const seq = ++previewSeq
-  const url = isEdit.value ? `/activities/${props.activity.id}/preview` : `/scopes/${props.scopeId}/activities/preview`
+  const url = isEdit.value ? `/activities/${props.activity.id}/preview` : `/buildings/${props.buildingId}/activities/preview`
   const { ok, data } = await requestJson('POST', url, {
     predecessor_id: form.predecessor_id,
     offset_days: form.offset_days === '' ? null : form.offset_days,
@@ -103,7 +103,7 @@ const changesLine = computed(() => {
 const submit = () => {
   const options = { preserveScroll: true, onSuccess: () => emit('close') }
   if (isEdit.value) form.patch(`/activities/${props.activity.id}`, options)
-  else form.post(`/scopes/${props.scopeId}/activities`, options)
+  else form.post(`/buildings/${props.buildingId}/activities`, options)
 }
 </script>
 
@@ -116,9 +116,9 @@ const submit = () => {
 
       <div class="grid gap-4 sm:grid-cols-[1fr_9rem]">
         <FormField label="Follows" :error="form.errors.predecessor_id"
-                   hint="Leave empty for an activity that counts from the project start.">
+                   hint="Leave empty for an activity that counts from the building's start.">
           <select v-model="form.predecessor_id">
-            <option :value="null">— Project start —</option>
+            <option :value="null">— Building start —</option>
             <option v-for="o in predecessorOptions" :key="o.id" :value="o.id">{{ o.description }}</option>
           </select>
         </FormField>

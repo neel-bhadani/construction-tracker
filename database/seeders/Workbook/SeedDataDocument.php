@@ -2,6 +2,7 @@
 
 namespace Database\Seeders\Workbook;
 
+use App\Import\ScheduleWorkbook;
 use UnexpectedValueException;
 
 /**
@@ -66,7 +67,7 @@ class SeedDataDocument
      */
     private static function totals(array $workbooks): array
     {
-        $lines = ['| Scope | Source | Activities | Total planned days | Planned finish |', '| --- | --- | --- | --- | --- |'];
+        $lines = ['| Building | Source | Activities | Total planned days | Planned finish |', '| --- | --- | --- | --- | --- |'];
 
         foreach ($workbooks as $workbook) {
             $lines[] = sprintf(
@@ -79,7 +80,7 @@ class SeedDataDocument
             );
         }
 
-        return [...$lines, '', "`projects.planned_start_date` = {$workbooks[0]->startDate} for all three."];
+        return [...$lines, '', "Each building's `planned_start_date` = {$workbooks[0]->startDate}, the workbooks' `E2`."];
     }
 
     /**
@@ -88,7 +89,7 @@ class SeedDataDocument
      */
     private static function nameMismatches(array $workbooks): array
     {
-        $lines = ['| Scope | Row | Activity | Formula (C) | Named | Imported `offset_days` |', '| --- | --- | --- | --- | --- | --- |'];
+        $lines = ['| Building | Row | Activity | Formula (C) | Named | Imported `offset_days` |', '| --- | --- | --- | --- | --- | --- |'];
 
         foreach ($workbooks as $workbook) {
             $found = false;
@@ -119,7 +120,7 @@ class SeedDataDocument
      */
     private static function adjustments(array $workbooks): array
     {
-        $lines = ['| Scope | Row | Activity | Formula (D) | `date_adjustment_days` |', '| --- | --- | --- | --- | --- |'];
+        $lines = ['| Building | Row | Activity | Formula (D) | `date_adjustment_days` |', '| --- | --- | --- | --- | --- |'];
 
         foreach ($workbooks as $workbook) {
             foreach ($workbook->activities as $row => $activity) {

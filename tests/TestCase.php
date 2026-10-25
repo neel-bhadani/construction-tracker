@@ -2,6 +2,7 @@
 
 namespace Tests;
 
+use App\Import\ImportUploads;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use RuntimeException;
 
@@ -21,6 +22,9 @@ abstract class TestCase extends BaseTestCase
         if ($database !== 'construction_tracker_test') {
             throw new RuntimeException("Refusing to run tests against database [{$database}]; only construction_tracker_test is allowed.");
         }
+
+        // uploaded workbooks go to a throwaway directory, never the app's storage
+        $this->app->instance(ImportUploads::class, new ImportUploads(sys_get_temp_dir().'/timeline-test-imports-'.getmypid()));
 
         return parent::setUpTraits();
     }

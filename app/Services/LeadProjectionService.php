@@ -4,8 +4,8 @@ namespace App\Services;
 
 use App\Data\ActivityMetrics;
 use App\Data\ActivityProjection;
+use App\Data\BuildingMetrics;
 use App\Data\LeadProjection;
-use App\Data\ScopeMetrics;
 use App\Enums\ActivityStatus;
 
 /**
@@ -19,7 +19,7 @@ class LeadProjectionService
     /**
      * @param  ?int  $whatIfLead  null means use the current lead; 0 is a lead like any other.
      */
-    public function project(ScopeMetrics $metrics, ?int $whatIfLead = null): LeadProjection
+    public function project(BuildingMetrics $metrics, ?int $whatIfLead = null): LeadProjection
     {
         $appliedLead = $whatIfLead ?? $metrics->currentLead;                          // C7
         $plannedFinish = $metrics->plannedFinish === null ? null : ScheduleDays::toDay($metrics->plannedFinish); // C10

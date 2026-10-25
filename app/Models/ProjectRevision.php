@@ -7,9 +7,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Audit row for a user-made change to a project's dates.
+ * Audit row for a user-made change to a project: name, details, default start, timezone,
+ * creation and deletion. Rows from before buildings existed also record the project's actual start.
  */
-#[Fillable(['project_id', 'user_id', 'field', 'old_value', 'new_value'])]
+#[Fillable(['project_id', 'user_id', 'field', 'old_value', 'new_value', 'note'])]
 class ProjectRevision extends Model
 {
     const UPDATED_AT = null;
