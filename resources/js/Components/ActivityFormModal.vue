@@ -29,6 +29,8 @@ const props = defineProps({
   rows: Array,            // every row in order: { id, description, predecessor_id, planned_day, date_adjustment_days, plannedDate }
   today: String,
   earliest: String,       // the building's actual start: no actual date before it
+  floors: { type: Array, default: () => [] },   // [{ id, name }]; none: no Floor field
+  floorId: { type: Number, default: null },     // a new activity's floor: the filter's, or the row above's
 })
 const emit = defineEmits(['close'])
 
@@ -37,6 +39,7 @@ const isInsert = computed(() => !isEdit.value && !!props.insertAfter)
 
 const form = useForm({
   description: '',
+  floor_id: null,
   predecessor_id: null,
   planned_date: '',
   actual_date: '',
@@ -80,6 +83,7 @@ watch(() => props.show, (open) => {
 
   form.clearErrors()
   form.description = a?.description ?? ''
+  form.floor_id = a ? (a.floor_id ?? null) : (props.insertAfter && !props.insertAfter.is_break ? (props.insertAfter.floor_id ?? null) : props.floorId)
   // the row above: the one inserted below, else the last row, else the building start
   form.predecessor_id = a ? a.predecessor_id : (props.insertAfter?.id ?? last?.id ?? null)
   form.actual_date = a?.actualDate ?? ''
@@ -131,7 +135,8 @@ const predecessorOptions = computed(() => props.rows.filter(r => r.id !== props.
 
 /* ---------------- break and actual ---------------- */
 
-watch(() => form.is_break, isBreak => { if (isBreak) form.actual_date = '' })
+// a break has no actual date and is on no floor
+watch(() => form.is_break, isBreak => { if (isBreak) { form.actual_date = ''; form.floor_id = null } })
 
 /* ---------------- push ---------------- */
 
@@ -200,6 +205,7 @@ const submit = () => {
 
   form.transform(data => ({
     description: data.description,
+    floor_id: data.is_break ? null : data.floor_id,
     predecessor_id: data.predecessor_id,
     planned_date: data.planned_date,
     actual_date: data.is_break || !data.actual_date ? null : data.actual_date,
@@ -221,6 +227,13 @@ const title = computed(() => (isEdit.value ? 'Edit activity' : isInsert.value ? 
     <form id="activity-form" class="space-y-4" @submit.prevent="submit">
       <FormField label="Activity name" required :error="form.errors.description">
         <input v-model="form.description" type="text" maxlength="255" />
+      </FormField>
+
+      <FormField v-if="floors.length && !form.is_break" label="Floor" :error="form.errors.floor_id">
+        <select v-model="form.floor_id">
+          <option :value="null">Whole building</option>
+          <option v-for="f in floors" :key="f.id" :value="f.id">{{ f.name }}</option>
+        </select>
       </FormField>
 
       <FormField label="Comes after" :error="form.errors.predecessor_id">
@@ -257,7 +270,7 @@ const title = computed(() => (isEdit.value ? 'Edit activity' : isInsert.value ? 
         <input v-model="form.is_break" type="checkbox" class="!min-h-0 !w-auto rounded" />
         This is a break (Diwali, Holi, festival)
       </label>
-      <p v-if="form.is_break" class="-mt-2 text-xs text-slate-500">A break has no actual date.</p>
+      <p v-if="form.is_break" class="-mt-2 text-xs text-slate-500">A break has no actual date{{ floors.length ? ' and is on no floor' : '' }}.</p>
 
       <div v-if="!showNote">
         <button type="button" class="text-sm font-semibold text-teal-700 hover:underline" @click="showNote = true">+ Add a note</button>

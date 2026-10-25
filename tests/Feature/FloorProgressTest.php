@@ -204,6 +204,27 @@ class FloorProgressTest extends TestCase
         $this->assertSame('Behind', $expected[1]['status']);
     }
 
+    /**
+     * The project page: the overall figure, then a card per building. Tower 1: 40/70, lead −2, so the
+     * hold-lead forecast is 12 Mar + 2 = 14 Mar. Tower 2: 30/30, done on its planned day (lead 0),
+     * finishing 31 Jan.
+     */
+    public function test_the_project_page_carries_the_overall_bar_and_a_card_per_building(): void
+    {
+        $this->actingAs($this->owner())->get("/projects/{$this->project->id}")->assertOk()
+            ->assertInertia(fn ($page) => $page->component('Projects/Show')
+                ->where('project.progress', 0.7)
+                ->has('project.buildings', 2)
+                ->where('project.buildings.0.name', 'Tower 1')
+                ->where('project.buildings.0.progress', 40 / 70)
+                ->where('project.buildings.0.currentLead', -2)
+                ->where('project.buildings.0.expectedHandover', '2026-03-14')
+                ->where('project.buildings.1.name', 'Tower 2')
+                ->where('project.buildings.1.progress', 1)
+                ->where('project.buildings.1.currentLead', 0)
+                ->where('project.buildings.1.expectedHandover', '2026-01-31'));
+    }
+
     private function progress(): BuildingProgress
     {
         return app(ProgressService::class)->building($this->building->fresh());

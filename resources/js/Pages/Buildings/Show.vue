@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Link, router, usePage } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import StatusChip from '@/Components/StatusChip.vue'
@@ -8,8 +8,12 @@ import RecordActualModal from '@/Components/RecordActualModal.vue'
 import ActivityFormModal from '@/Components/ActivityFormModal.vue'
 import ConfirmDialog from '@/Components/ConfirmDialog.vue'
 import RowMenu from '@/Components/RowMenu.vue'
+import FloorsSection from '@/Components/FloorsSection.vue'
+import FloorChips from '@/Components/FloorChips.vue'
+import MoveToFloorModal from '@/Components/MoveToFloorModal.vue'
 import BuildingDatesModal from '@/Components/BuildingDatesModal.vue'
 import { formatDate, signed, percent, leadWord } from '@/lib/format'
+import { activityFloorKey, shortFloorName } from '@/lib/floors'
 
 /*
  | One building's timeline. Every figure is the server's — BuildingMetricsService and
@@ -26,6 +30,7 @@ const props = defineProps({
   projection: Object,
   chart: Object,
   activities: Array,
+  floors: Array,          // ProgressService floor rows, "Whole building" last; empty without floors
   today: String,
 })
 
@@ -40,6 +45,29 @@ const rows = computed(() => {
   return props.metrics.activities.map(m => ({ ...m, ...projected[m.id], ...stored[m.id] }))
 })
 
+/* ---------------- floors ---------------- */
+
+const hasFloors = computed(() => props.floors.length > 0)
+const buildingFloors = computed(() => props.floors.filter(f => f.id !== null).map(f => ({ id: f.id, name: f.name })))
+const floorNames = computed(() => Object.fromEntries(buildingFloors.value.map(f => [f.id, f.name])))
+
+// 'all', 'whole' or a floor id; the Floors section and the chips set the same filter
+const floorFilter = ref('all')
+watch(hasFloors, has => { if (!has) floorFilter.value = 'all' })
+// a deleted floor's filter falls back to everything
+watch(buildingFloors, floors => {
+  if (typeof floorFilter.value === 'number' && !floors.some(f => f.id === floorFilter.value)) floorFilter.value = 'all'
+})
+
+const shownRows = computed(() => floorFilter.value === 'all'
+  ? rows.value
+  : rows.value.filter(row => activityFloorKey(row) === floorFilter.value))
+
+// a new activity goes on the floor being looked at
+const newFloorId = computed(() => (typeof floorFilter.value === 'number' ? floorFilter.value : null))
+
+const floorTag = row => (row.floor_id ? shortFloorName(floorNames.value[row.floor_id] ?? '') : 'Whole building')
+
 const earliestActual = computed(() => props.metrics.actualStartDate)
 
 const lead = computed(() => props.metrics.currentLead)
@@ -51,6 +79,7 @@ const leadTone = computed(() => lead.value === null ? 'text-slate-900' : lead.va
 const recording = ref(null)
 const editing = ref(null)        // a row, or {} for a new activity at the end
 const inserting = ref(null)      // the row a new activity goes below
+const moving = ref(null)         // the row whose floor is being changed
 const deleting = ref(null)
 const deleteError = ref('')
 const deleteProcessing = ref(false)
@@ -77,6 +106,8 @@ const closeForm = () => { editing.value = null; inserting.value = null }
 // the "⋯" menu; Actual and Edit are buttons of their own
 const menuItems = row => [
   { label: 'Insert activity below', action: () => { inserting.value = row } },
+  // a break is on no floor
+  ...(hasFloors.value && !row.is_break ? [{ label: 'Move to floor…', action: () => { moving.value = row } }] : []),
   { label: 'Delete', action: () => openDelete(row), danger: true },
 ]
 </script>
@@ -143,6 +174,11 @@ const menuItems = row => [
 
     <ProgressChart :chart="chart" />
 
+    <FloorsSection :floors="floors" :project-id="project.id" :building-id="building.id"
+                   :active="floorFilter" @select="key => (floorFilter = key)" />
+
+    <FloorChips v-if="hasFloors" v-model="floorFilter" :floors="floors" :rows="rows" />
+
     <!-- desktop: the table -->
     <div class="card hidden overflow-x-auto md:block">
       <table class="w-full text-sm">
@@ -158,7 +194,7 @@ const menuItems = row => [
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in rows" :key="row.id" class="group border-b border-slate-100 last:border-0"
+          <tr v-for="row in shownRows" :key="row.id" class="group border-b border-slate-100 last:border-0"
               :class="[
                 row.status === 'NEXT' ? 'bg-teal-50 ring-1 ring-inset ring-teal-300' : '',
                 row.is_break ? 'bg-[repeating-linear-gradient(135deg,#f8fafc,#f8fafc_8px,#f1f5f9_8px,#f1f5f9_16px)] text-slate-500' : '',
@@ -170,6 +206,8 @@ const menuItems = row => [
                       @click="inserting = row">+</button>
               <span :class="row.is_break ? 'italic' : 'font-medium text-slate-900'">{{ row.description }}</span>
               <span v-if="row.is_break" class="ml-2 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-600">Break</span>
+              <span v-if="hasFloors && !row.is_break" data-test="floor-tag" class="ml-2 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-medium"
+                    :class="row.floor_id ? 'bg-sky-50 text-sky-800' : 'text-slate-400'">{{ floorTag(row) }}</span>
             </td>
             <td class="whitespace-nowrap px-3 py-2.5">
               {{ formatDate(row.plannedDate) }}
@@ -197,10 +235,14 @@ const menuItems = row => [
 
     <!-- phone: the same rows as cards -->
     <div class="space-y-2.5 md:hidden">
-      <div v-for="row in rows" :key="row.id" class="card p-4"
+      <div v-for="row in shownRows" :key="row.id" class="card p-4"
            :class="[row.status === 'NEXT' ? '!border-teal-400 bg-teal-50' : '', row.is_break ? 'bg-slate-50 text-slate-500' : '']">
         <div class="mb-2 flex items-start gap-2">
-          <div class="min-w-0 flex-1" :class="row.is_break ? 'italic' : 'font-semibold text-slate-900'">{{ row.description }}</div>
+          <div class="min-w-0 flex-1" :class="row.is_break ? 'italic' : 'font-semibold text-slate-900'">
+            {{ row.description }}
+            <span v-if="hasFloors && !row.is_break" class="ml-1 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-medium not-italic"
+                  :class="row.floor_id ? 'bg-sky-50 text-sky-800' : 'text-slate-400'">{{ floorTag(row) }}</span>
+          </div>
           <StatusChip :status="row.status" />
         </div>
         <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
@@ -229,11 +271,14 @@ const menuItems = row => [
     </div>
 
     <p v-if="!rows.length" class="card p-6 text-sm text-slate-500">This building has no activities yet.</p>
+    <p v-else-if="!shownRows.length" class="card p-6 text-sm text-slate-500">No activities on this floor yet.</p>
 
     <RecordActualModal :show="!!recording" :activity="recording" :today="today" :earliest="earliestActual"
                        @close="recording = null" />
     <ActivityFormModal :show="!!editing || !!inserting" :building="building" :activity="editing?.id ? editing : null"
-                       :insert-after="inserting" :rows="rows" :today="today" :earliest="earliestActual" @close="closeForm" />
+                       :insert-after="inserting" :rows="rows" :today="today" :earliest="earliestActual"
+                       :floors="buildingFloors" :floor-id="newFloorId" @close="closeForm" />
+    <MoveToFloorModal :show="!!moving" :activity="moving" :floors="buildingFloors" @close="moving = null" />
     <ConfirmDialog :show="!!deleting" title="Delete activity" confirm-text="Delete"
                    :processing="deleteProcessing"
                    :message="deleteError || (deleting ? `Delete [${deleting.description}]? Its history is kept in the audit trail.` : '')"

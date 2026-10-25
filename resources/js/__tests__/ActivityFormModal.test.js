@@ -134,4 +134,35 @@ describe('ActivityFormModal', () => {
     expect(w.text()).toContain('C: 15 Feb 2026 → 22 Feb 2026')
     expect(w.text()).toContain('and 5 more')
   })
+
+  describe('the Floor field', () => {
+    const buildingFloors = [{ id: 11, name: 'Ground floor' }, { id: 12, name: '1st floor' }]
+    const floorSelect = w => w.findAll('select').find(s => s.findAll('option').some(o => o.text() === 'Whole building'))
+
+    it('offers Whole building and the floors', async () => {
+      const w = await open({ floors: buildingFloors })
+      expect(floorSelect(w).findAll('option').map(o => o.text())).toEqual(['Whole building', 'Ground floor', '1st floor'])
+    })
+
+    it('starts on the floor of the row inserted below, or of the filter', async () => {
+      const onGround = rows.map(r => (r.id === 2 ? { ...r, floor_id: 11 } : r))
+      expect(floorSelect(await open({ floors: buildingFloors, rows: onGround, insertAfter: onGround[1] })).element.value).toBe('11')
+      expect(floorSelect(await open({ floors: buildingFloors, floorId: 12 })).element.value).toBe('12')
+    })
+
+    it('is hidden for a break, and a break is saved on no floor', async () => {
+      const w = await open({ floors: buildingFloors, floorId: 12 })
+      await w.find('input[type="checkbox"]').setValue(true)
+      expect(floorSelect(w)).toBeUndefined()
+      expect(w.text()).toContain('A break has no actual date and is on no floor.')
+
+      const edit = await open({ floors: buildingFloors, activity: rows[4] })
+      expect(floorSelect(edit)).toBeUndefined()
+    })
+
+    it('is not there for a building without floors', async () => {
+      expect(floorSelect(await open({}))).toBeUndefined()
+    })
+  })
 })
+
