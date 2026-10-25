@@ -2,6 +2,7 @@
 
 namespace App\Import;
 
+use App\Enums\BuildingType;
 use App\Models\Building;
 use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -22,6 +23,13 @@ class ScheduleWorkbook
         'Tower A' => 'SV_A3.xlsx',
         'Tower B' => 'SV_B3.xlsx',
         'Overall Timeline' => 'SV_Overall3.xlsx',
+    ];
+
+    /** What each of the client's timelines is: the two towers, and the project's common work. */
+    public const TYPES = [
+        'Tower A' => BuildingType::Building,
+        'Tower B' => BuildingType::Building,
+        'Overall Timeline' => BuildingType::CommonWork,
     ];
 
     public const ADJUSTMENT_REASON = 'carried from original sheet';

@@ -220,6 +220,25 @@ Index on `(building_id, created_at)`.
 
 ---
 
+## plan_imports
+
+The log of `php artisan timeline:import-json`, one row per imported project. Written only by `PlanImporter`.
+
+| Column | Type | Null | Default | Notes |
+| --- | --- | --- | --- | --- |
+| `id` | bigint unsigned, auto | no | | PK |
+| `owner_id` | bigint unsigned | no | | FK → `users.id`, `ON DELETE RESTRICT` |
+| `project_id` | bigint unsigned | yes | | FK → `projects.id`, `ON DELETE SET NULL` |
+| `project_name` | varchar(150) | no | | As imported, kept if the project goes |
+| `file` | varchar(255) | no | | The JSON file's name |
+| `sha256` | char(64) | no | | The file's content hash |
+| `counts` | json | no | | Per building: floors, activities, breaks, actuals; dates and figures checked |
+| `created_at` | timestamp | no | now | |
+
+`UNIQUE (owner_id, sha256)`: the same file cannot be imported twice for one owner.
+
+---
+
 ## users
 
 Standard Laravel, plus:

@@ -23,7 +23,7 @@ Put this file in the repo as `docs/PLAN_V5.md`. Read AGENTS.md first: its rules 
 - Commands: `user:create`, `project:transfer {id} {email}`.
 - The migration needs `PROJECT_OWNER_EMAIL=... php artisan migrate` when projects exist.
 
-## Phase 2: activity dialog and insert between
+## Phase 2: activity dialog and insert between (DONE)
 
 ### Dialog fields (Add and Edit), in this order
 
@@ -73,7 +73,7 @@ moves from X to Y" with the first 5 changed activities, or "No other dates chang
 - a break can't have an actual date
 - the oracle and the 151-row proof still pass
 
-## Phase 3: floors and 3-level progress
+## Phase 3: floors and 3-level progress (DONE)
 
 ### Schema
 
@@ -116,7 +116,7 @@ moves from X to Y" with the first 5 changed activities, or "No other dates chang
 A hand-made building with 3 floors plus common work, with every number worked out by hand, and the floor
 delete.
 
-## Phase 4: Excel → JSON → DB (same approach as ~/lead-crm1, which is read only)
+## Phase 4: Excel → JSON → DB (same approach as ~/lead-crm1, which is read only) (DONE, real import not yet run)
 
 ### Step 1: `php artisan timeline:excel-to-json {--dir=} {--out=}`
 

@@ -19,7 +19,7 @@ class PlanWriter
     public function __construct(private readonly ScheduleRecalculator $recalculator) {}
 
     /**
-     * @param  array<int|string, array{description: string, predecessor: int|string|null, offset_days: int, date_adjustment_days: int, adjustment_reason: ?string, is_break: bool, sort_order: int, actual_date?: ?string, floor_id?: ?int}>  $rows  keyed by any id the predecessor keys refer to; floor_id is a floor of $building
+     * @param  array<int|string, array{description: string, predecessor: int|string|null, offset_days: int, date_adjustment_days: int, adjustment_reason: ?string, is_break: bool, sort_order: int, actual_date?: ?string, floor_id?: ?int, notes?: ?string}>  $rows  keyed by any id the predecessor keys refer to; floor_id is a floor of $building
      * @param  ?User  $user  the person creating it; each activity then gets a `created` revision naming $origin
      * @return array<int|string, int> new activity id for each row key
      */
@@ -40,6 +40,7 @@ class PlanWriter
                     'planned_date' => $building->planned_start_date->toDateString(),
                     'actual_date' => $row['actual_date'] ?? null,
                     'sort_order' => $row['sort_order'],
+                    'notes' => $row['notes'] ?? null,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);

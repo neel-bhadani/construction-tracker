@@ -5,6 +5,8 @@ namespace App\Http\Requests;
 use App\Enums\BuildingType;
 use App\Exceptions\PlanImportException;
 use App\Import\ImportUploads;
+use App\Import\PlanDocument;
+use App\Import\PlanDocumentValidator;
 use App\Import\ScheduleWorkbook;
 use App\Models\Building;
 use App\Models\Project;
@@ -107,6 +109,17 @@ class BuildingRequest extends FormRequest
                     $this->origin = 'imported from Excel › '.$this->string('sheet');
                 } catch (PlanImportException $exception) {
                     $validator->errors()->add('sheet', $exception->getMessage());
+
+                    return;
+                }
+
+                // the same checks as `timeline:import-json`: the chain, loops, breaks, every planned date
+                $problems = app(PlanDocumentValidator::class)->building(
+                    PlanDocument::building($this->plan, BuildingType::from($this->input('type')), null, guessFloors: false),
+                );
+                if ($problems !== []) {
+                    $this->plan = null;
+                    $validator->errors()->add('sheet', "Sheet [{$this->string('sheet')}] cannot be imported. ".implode(' ', array_slice($problems, 0, 5)));
                 }
             }
         }];

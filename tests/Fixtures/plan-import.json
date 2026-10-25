@@ -1,0 +1,180 @@
+{
+    "project": {
+        "name": "Hand-made Heights",
+        "timezone": "Asia/Kolkata"
+    },
+    "buildings": [
+        {
+            "name": "Tower 1",
+            "type": "building",
+            "planned_start": "2026-01-01",
+            "actual_start": null,
+            "floors": [
+                {
+                    "name": "Ground floor",
+                    "level": 0
+                },
+                {
+                    "name": "1st floor",
+                    "level": 1
+                },
+                {
+                    "name": "2nd floor",
+                    "level": 2
+                }
+            ],
+            "activities": [
+                {
+                    "row": 4,
+                    "position": 1,
+                    "name": "Excavation",
+                    "is_break": false,
+                    "floor": null,
+                    "comes_after_row": null,
+                    "offset_days": 10,
+                    "adjustment": 0,
+                    "planned_date": "2026-01-11",
+                    "actual_date": "2026-01-10",
+                    "note": null
+                },
+                {
+                    "row": 5,
+                    "position": 2,
+                    "name": "GF SLAB",
+                    "is_break": false,
+                    "floor": "Ground floor",
+                    "comes_after_row": 4,
+                    "offset_days": 20,
+                    "adjustment": 0,
+                    "planned_date": "2026-01-31",
+                    "actual_date": "2026-01-29",
+                    "note": "Poured in two halves"
+                },
+                {
+                    "row": 6,
+                    "position": 3,
+                    "name": "GF walls",
+                    "is_break": false,
+                    "floor": "Ground floor",
+                    "comes_after_row": 5,
+                    "offset_days": 10,
+                    "adjustment": 0,
+                    "planned_date": "2026-02-10",
+                    "actual_date": "2026-02-12",
+                    "note": null
+                },
+                {
+                    "row": 7,
+                    "position": 4,
+                    "name": "1st SLAB",
+                    "is_break": false,
+                    "floor": "1st floor",
+                    "comes_after_row": 5,
+                    "offset_days": 15,
+                    "adjustment": 0,
+                    "planned_date": "2026-02-15",
+                    "actual_date": null,
+                    "note": null
+                },
+                {
+                    "row": 8,
+                    "position": 5,
+                    "name": "DIWALI BREAK 10",
+                    "is_break": true,
+                    "floor": null,
+                    "comes_after_row": 7,
+                    "offset_days": 10,
+                    "adjustment": 3,
+                    "planned_date": "2026-02-28",
+                    "actual_date": null,
+                    "note": null
+                },
+                {
+                    "row": 9,
+                    "position": 6,
+                    "name": "1F walls",
+                    "is_break": false,
+                    "floor": "1st floor",
+                    "comes_after_row": 8,
+                    "offset_days": 10,
+                    "adjustment": 0,
+                    "planned_date": "2026-03-07",
+                    "actual_date": null,
+                    "note": null
+                },
+                {
+                    "row": 10,
+                    "position": 7,
+                    "name": "2nd SLAB 5",
+                    "is_break": false,
+                    "floor": "2nd floor",
+                    "comes_after_row": 8,
+                    "offset_days": 5,
+                    "adjustment": 0,
+                    "planned_date": "2026-03-02",
+                    "actual_date": null,
+                    "note": null
+                },
+                {
+                    "row": 11,
+                    "position": 8,
+                    "name": "Handover",
+                    "is_break": false,
+                    "floor": null,
+                    "comes_after_row": 9,
+                    "offset_days": 5,
+                    "adjustment": 0,
+                    "planned_date": "2026-03-12",
+                    "actual_date": null,
+                    "note": null
+                }
+            ]
+        },
+        {
+            "name": "Site works",
+            "type": "common_work",
+            "planned_start": "2026-01-01",
+            "actual_start": null,
+            "floors": [],
+            "activities": [
+                {
+                    "row": 4,
+                    "position": 1,
+                    "name": "Site clearing",
+                    "is_break": false,
+                    "floor": null,
+                    "comes_after_row": null,
+                    "offset_days": 30,
+                    "adjustment": 0,
+                    "planned_date": "2026-01-31",
+                    "actual_date": "2026-01-31",
+                    "note": null
+                }
+            ]
+        }
+    ],
+    "expected": {
+        "Tower 1": {
+            "totalPlannedDays": 70,
+            "daysCompleted": 40,
+            "progress": 0.5714285714285714,
+            "currentLead": -2,
+            "plannedFinish": "2026-03-12",
+            "latestActual": "2026-02-12",
+            "forecastAveragePace": "2026-03-16",
+            "forecastRecentPace": "2026-03-26",
+            "forecastHoldLead": "2026-03-14"
+        },
+        "Site works": {
+            "totalPlannedDays": 30,
+            "daysCompleted": 30,
+            "progress": 1.0,
+            "currentLead": 0,
+            "plannedFinish": "2026-01-31",
+            "latestActual": "2026-01-31",
+            "forecastAveragePace": "2026-01-31",
+            "forecastRecentPace": "2026-01-31",
+            "forecastHoldLead": "2026-01-31"
+        }
+    }
+}

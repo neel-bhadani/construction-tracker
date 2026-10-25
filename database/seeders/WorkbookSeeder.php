@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Enums\BuildingType;
 use App\Import\ScheduleWorkbook;
 use App\Models\Building;
 use App\Models\Project;
@@ -25,12 +24,6 @@ use RuntimeException;
 class WorkbookSeeder extends Seeder
 {
     public const PROJECT_NAME = 'Shaligram Vrundavan';
-
-    private const TYPES = [
-        'Tower A' => BuildingType::Building,
-        'Tower B' => BuildingType::Building,
-        'Overall Timeline' => BuildingType::CommonWork,
-    ];
 
     public function run(PlanWriter $writer, ?User $owner = null): void
     {
@@ -55,7 +48,7 @@ class WorkbookSeeder extends Seeder
                 $building = Building::create([
                     'project_id' => $project->id,
                     'name' => $workbook->scope,
-                    'type' => self::TYPES[$workbook->scope],
+                    'type' => ScheduleWorkbook::TYPES[$workbook->scope],
                     'planned_start_date' => $workbook->startDate,
                     'sort_order' => $index + 1,
                 ]);
