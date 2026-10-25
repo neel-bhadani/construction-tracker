@@ -8,6 +8,7 @@ use App\Import\ScheduleWorkbook;
 use App\Models\Activity;
 use App\Models\Building;
 use App\Models\BuildingRevision;
+use App\Models\Floor;
 use App\Models\Project;
 use App\Models\ProjectRevision;
 use App\Models\User;
@@ -27,7 +28,10 @@ class ProjectEditor
 
     private const BUILDING_FIELDS = ['name', 'type'];
 
-    public function __construct(private readonly PlanWriter $writer) {}
+    public function __construct(
+        private readonly PlanWriter $writer,
+        private readonly FloorEditor $floors,
+    ) {}
 
     /**
      * @param  array{name: string, details: ?string, planned_start_date: string, timezone?: string}  $data
@@ -111,7 +115,7 @@ class ProjectEditor
             $this->buildingRevision($building, $user, 'created', null, $building->name, $origin);
 
             if ($plan instanceof Building) {
-                $this->writer->write($building, $this->copiedPlan($plan), $user, $origin);
+                $this->writer->write($building, $this->copiedPlan($plan, $this->copyFloors($plan, $building, $user)), $user, $origin);
             } elseif ($plan instanceof ScheduleWorkbook) {
                 $this->writer->write($building, $plan->plan(withActualDates: false), $user, $origin);
 
@@ -192,12 +196,30 @@ class ProjectEditor
     }
 
     /**
+     * The source's floors, same names and levels, in the new building.
+     *
+     * @return array<int, int> new floor id for each source floor id
+     */
+    private function copyFloors(Building $source, Building $building, User $user): array
+    {
+        $ids = [];
+        foreach (Floor::where('building_id', $source->id)->orderBy('level')->orderBy('id')->get() as $floor) {
+            $ids[$floor->id] = $this->floors->add($building, $floor->name, $floor->level, $user)->id;
+        }
+
+        return $ids;
+    }
+
+    /**
+     * @param  array<int, int>  $floorIds  new floor id for each source floor id
      * @return array<int, array<string, mixed>>
      */
-    private function copiedPlan(Building $source): array
+    private function copiedPlan(Building $source, array $floorIds): array
     {
         return Activity::where('building_id', $source->id)->orderBy('sort_order')->orderBy('id')->get()
             ->mapWithKeys(fn (Activity $activity) => [$activity->id => [
+                // an activity on a deleted floor is the whole building's, as in the source
+                'floor_id' => $floorIds[$activity->floor_id] ?? null,
                 'description' => $activity->description,
                 'predecessor' => $activity->predecessor_id,
                 'offset_days' => $activity->offset_days,

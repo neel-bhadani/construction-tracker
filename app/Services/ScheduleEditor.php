@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\DB;
 class ScheduleEditor
 {
     /** The plan's fields; changing any of the first three moves planned dates. */
-    public const PLAN_FIELDS = ['predecessor_id', 'offset_days', 'date_adjustment_days', 'adjustment_reason', 'description', 'is_break', 'notes'];
+    public const PLAN_FIELDS = ['predecessor_id', 'offset_days', 'date_adjustment_days', 'adjustment_reason', 'description', 'is_break', 'notes', 'floor_id'];
 
     private const CHAIN_FIELDS = ['predecessor_id', 'offset_days', 'date_adjustment_days'];
 
@@ -190,6 +190,17 @@ class ScheduleEditor
         return DB::transaction(function () use ($activity, $actualDate, $notes, $user) {
             $activity = Activity::lockForUpdate()->findOrFail($activity->id);
             $this->apply($activity, ['actual_date' => $actualDate, 'notes' => $notes], self::ACTUAL_FIELDS, $user);
+
+            return $activity->refresh();
+        });
+    }
+
+    /** A floor moves no planned date, so there is no recalculation. */
+    public function moveToFloor(Activity $activity, ?int $floorId, User $user): Activity
+    {
+        return DB::transaction(function () use ($activity, $floorId, $user) {
+            $activity = Activity::lockForUpdate()->findOrFail($activity->id);
+            $this->apply($activity, ['floor_id' => $floorId], ['floor_id'], $user);
 
             return $activity->refresh();
         });

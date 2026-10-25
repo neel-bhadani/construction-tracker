@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\BuildingController;
+use App\Http\Controllers\FloorController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
@@ -37,6 +38,15 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         Route::patch('projects/{project}/buildings/{building}/dates', [BuildingController::class, 'dates'])->name('buildings.dates');
         Route::patch('projects/{project}/buildings/{building}/move', [BuildingController::class, 'move'])->name('buildings.move');
         Route::delete('projects/{project}/buildings/{building}', [BuildingController::class, 'destroy'])->name('buildings.destroy');
+
+        // floors belong to their building, the same way
+        Route::get('projects/{project}/buildings/{building}/floors', [FloorController::class, 'index'])->name('floors.index');
+        Route::post('projects/{project}/buildings/{building}/floors', [FloorController::class, 'store'])->name('floors.store');
+        // "Ground + 1 to 13"
+        Route::post('projects/{project}/buildings/{building}/floors/range', [FloorController::class, 'range'])->name('floors.range');
+        Route::patch('projects/{project}/buildings/{building}/floors/{floor}', [FloorController::class, 'update'])->name('floors.update');
+        // its activities move to the whole building
+        Route::delete('projects/{project}/buildings/{building}/floors/{floor}', [FloorController::class, 'destroy'])->name('floors.destroy');
     });
 
     // the first step of "Import from Excel": upload, get the sheet names back
@@ -47,6 +57,8 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
 
     // what happened on site
     Route::patch('activities/{activity}/actual', [ActivityController::class, 'recordActual'])->name('activities.actual');
+    // "Move to floor"
+    Route::patch('activities/{activity}/floor', [ActivityController::class, 'moveToFloor'])->name('activities.floor');
 
     // the plan
     Route::post('buildings/{building}/activities', [ActivityController::class, 'store'])->name('activities.store');

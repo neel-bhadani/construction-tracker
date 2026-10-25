@@ -9,8 +9,7 @@ use App\Import\ImportUploads;
 use App\Models\Building;
 use App\Models\Project;
 use App\Services\BuildingChartService;
-use App\Services\BuildingMetricsService;
-use App\Services\LeadProjectionService;
+use App\Services\ProgressService;
 use App\Services\ProjectEditor;
 use App\Services\ScheduleDays;
 use App\Services\ScheduleEditor;
@@ -22,18 +21,18 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * A building and its timeline. show() is the timeline screen: every figure is
- * BuildingMetricsService and LeadProjectionService output passed through as it is.
+ * A building and its timeline. show() is the timeline screen: every figure is ProgressService
+ * output (BuildingMetricsService and LeadProjectionService, plus the floors) passed through as it is.
  */
 class BuildingController extends Controller
 {
     public function __construct(private readonly ProjectEditor $editor) {}
 
-    public function show(Request $request, Project $project, Building $building, BuildingMetricsService $metrics, LeadProjectionService $leads, BuildingChartService $charts): Response
+    public function show(Project $project, Building $building, ProgressService $progress, BuildingChartService $charts): Response
     {
         Gate::authorize('view', $building);
 
-        $buildingMetrics = $metrics->forBuilding($building);
+        $buildingProgress = $progress->building($building);
 
         return Inertia::render('Buildings/Show', [
             'project' => ['id' => $project->id, 'name' => $project->name],
@@ -45,14 +44,16 @@ class BuildingController extends Controller
                 'planned_start_date' => $building->planned_start_date->toDateString(),
                 'actual_start_date' => $building->actual_start_date?->toDateString(),
             ],
-            'metrics' => $buildingMetrics,
-            'projection' => $leads->project($buildingMetrics),
+            'metrics' => $buildingProgress->metrics,
+            'projection' => $buildingProgress->projection,
+            // one row per floor, then "Whole building"; empty for a building without floors
+            'floors' => $buildingProgress->floors,
             // the progress chart; a page prop, so recording an actual redraws it with the rest
             'chart' => $charts->chart($building),
             // the stored fields the edit form starts from; derived figures come from the services.
             // planned_day is what the dialog turns a typed planned date into an offset with.
             'activities' => $building->activities()->orderBy('sort_order')->orderBy('id')
-                ->get(['id', 'description', 'predecessor_id', 'offset_days', 'date_adjustment_days', 'adjustment_reason', 'is_break', 'notes', 'planned_day']),
+                ->get(['id', 'floor_id', 'description', 'predecessor_id', 'offset_days', 'date_adjustment_days', 'adjustment_reason', 'is_break', 'notes', 'planned_day']),
             'today' => ScheduleDays::toDate(ScheduleDays::currentDay(null, $project->timezone)),
         ]);
     }

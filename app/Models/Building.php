@@ -64,6 +64,16 @@ class Building extends Model
     }
 
     /**
+     * Its floors, lowest first. Optional: a building may have none.
+     *
+     * @return HasMany<Floor, $this>
+     */
+    public function floors(): HasMany
+    {
+        return $this->hasMany(Floor::class)->orderBy('level')->orderBy('id');
+    }
+
+    /**
      * @return HasMany<BuildingRevision, $this>
      */
     public function revisions(): HasMany

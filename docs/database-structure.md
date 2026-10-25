@@ -96,6 +96,7 @@ The core table. One row per activity, including holiday breaks.
 | --- | --- | --- | --- | --- |
 | `id` | bigint unsigned, auto | no | | PK |
 | `building_id` | bigint unsigned | no | | FK → `buildings.id`, `ON DELETE CASCADE`. Formerly `scope_id` |
+| `floor_id` | bigint unsigned | yes | null | FK → `floors.id`, `ON DELETE SET NULL`. Null = whole building / common work. A break has none |
 | `description` | varchar(255) | no | | e.g. `3rd SLAB 15` |
 | `predecessor_id` | bigint unsigned | yes | null | FK → `activities.id`, `ON DELETE RESTRICT`. Null = chain root |
 | `offset_days` | smallint unsigned | no | 0 | Days after the predecessor |
@@ -127,6 +128,26 @@ computation. Keep both.
 `planned_day` and `planned_date` are the **only** derived values that are stored. They are written exclusively
 by `ScheduleRecalculator`, never by a controller, model mutator, or observer. Everything else — progress, pace,
 forecasts, lead, status — is computed at read time.
+
+---
+
+## floors
+
+Optional floors of a building. A building without any looks exactly as before.
+
+| Column | Type | Null | Default | Notes |
+| --- | --- | --- | --- | --- |
+| `id` | bigint unsigned, auto | no | | PK |
+| `building_id` | bigint unsigned | no | | FK → `buildings.id`, `ON DELETE CASCADE` |
+| `name` | varchar(50) | no | | "Ground floor", "1st floor", "Basement 1" |
+| `level` | smallint | no | | Sort order: ground 0, basements negative |
+| `created_at` / `updated_at` | timestamp | yes | | |
+| `deleted_at` | timestamp | yes | null | Soft delete, through `FloorEditor`, which first moves the floor's activities to the whole building |
+| `active_name` | varchar(50), generated | yes | | `IF(deleted_at IS NULL, name, NULL)`, stored |
+
+`UNIQUE (building_id, active_name)`, as on buildings; `INDEX (building_id, level)`. Floor changes are audited in
+`building_revisions` (`floor_added`, `floor_renamed`, `floor_deleted`); an activity's floor in `activity_revisions`
+(`floor_id`).
 
 ---
 
