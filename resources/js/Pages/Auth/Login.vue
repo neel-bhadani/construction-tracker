@@ -5,26 +5,27 @@ import AuthLayout from '@/Layouts/AuthLayout.vue'
 import FormField from '@/Components/FormField.vue'
 
 /*
- | One page, two tabs. /login opens it on Sign in and /signup on Sign up, so
- | each tab has an address of its own: a failed sign-up redirects back to the
- | tab it came from, and a link to /signup lands on the right form.
+ | One page, two tabs. /login opens it on Sign in and /register on Register,
+ | so each tab has an address of its own: a failed registration redirects back
+ | to the tab it came from.
  |
  | The tab switch is a visit with preserve-state, so the component — and both
  | forms with whatever was typed into them — survives the move between the two.
  |
- | Sign up asks for an account, it does not make one that works. The server
- | writes it as a viewer awaiting approval, whatever this form sends.
+ | With registration closed (canRegister false) there are no tabs and nothing
+ | on the page mentions signing up; /register itself answers 404.
  */
 const props = defineProps({
   status: String,
   tab: { type: String, default: 'signin' },
+  canRegister: Boolean,
 })
 
-const isSignup = computed(() => props.tab === 'signup')
+const isRegister = computed(() => props.canRegister && props.tab === 'register')
 
 const tabs = [
   { key: 'signin', label: 'Sign in', href: '/login' },
-  { key: 'signup', label: 'Sign up', href: '/signup' },
+  { key: 'register', label: 'Register', href: '/register' },
 ]
 
 /* ---------------- sign in ---------------- */
@@ -41,25 +42,25 @@ const submitLogin = () => login.post('/login', {
   onFinish: () => login.reset('password'),
 })
 
-/* ---------------- sign up ---------------- */
+/* ---------------- register ---------------- */
 
-const signup = useForm({
+const register = useForm({
   name: '',
   email: '',
   password: '',
   password_confirmation: '',
 })
 
-const submitSignup = () => signup.post('/signup', {
-  onFinish: () => signup.reset('password', 'password_confirmation'),
+const submitRegister = () => register.post('/register', {
+  onFinish: () => register.reset('password', 'password_confirmation'),
 })
 </script>
 
 <template>
-  <Head :title="isSignup ? 'Sign up' : 'Sign in'" />
+  <Head :title="isRegister ? 'Register' : 'Sign in'" />
 
   <AuthLayout>
-    <div class="mb-7 flex gap-1 border-b border-slate-100" role="tablist">
+    <div v-if="canRegister" class="mb-7 flex gap-1 border-b border-slate-100" role="tablist">
       <Link v-for="t in tabs" :key="t.key" :href="t.href" preserve-state
             role="tab" :aria-selected="tab === t.key"
             class="-mb-px border-b-2 px-3 py-2 text-sm font-medium"
@@ -71,20 +72,11 @@ const submitSignup = () => signup.post('/signup', {
     </div>
 
     <!-- ================= sign in ================= -->
-    <template v-if="!isSignup">
+    <template v-if="!isRegister">
       <h1 class="mb-1.5 text-2xl font-semibold tracking-tight">Sign in</h1>
-      <p class="mb-7 text-sm text-slate-500">Use the email address your account was approved with.</p>
+      <p class="mb-7 text-sm text-slate-500">Sign in with your email address and password.</p>
 
       <div v-if="status" class="mb-4 text-sm font-medium text-teal-700">{{ status }}</div>
-
-      <!--
-        Waiting for approval. Not a red line under the email field: the person
-        typed nothing wrong, and a field error would send them round retyping a
-        password that was right.
-      -->
-      <div v-if="login.errors.approval" class="warn-box mb-4 !text-sm" role="status">
-        {{ login.errors.approval }} An administrator has to approve it before you can sign in.
-      </div>
 
       <form class="space-y-4" @submit.prevent="submitLogin">
 
@@ -118,45 +110,43 @@ const submitSignup = () => signup.post('/signup', {
         </button>
       </form>
 
-      <p class="mt-6 text-center text-sm text-slate-500">
+      <p v-if="canRegister" class="mt-6 text-center text-sm text-slate-500">
         New here?
-        <Link href="/signup" preserve-state class="font-semibold text-teal-700 hover:underline">
-          Request an account
+        <Link href="/register" preserve-state class="font-semibold text-teal-700 hover:underline">
+          Create an account
         </Link>
       </p>
     </template>
 
-    <!-- ================= sign up ================= -->
+    <!-- ================= register ================= -->
     <template v-else>
-      <h1 class="mb-1.5 text-2xl font-semibold tracking-tight">Request an account</h1>
-      <p class="mb-7 text-sm text-slate-500">
-        An administrator approves every new account. You can sign in once they have.
-      </p>
+      <h1 class="mb-1.5 text-2xl font-semibold tracking-tight">Create an account</h1>
+      <p class="mb-7 text-sm text-slate-500">You are signed in as soon as it is created.</p>
 
       <!-- the rate limit: about the whole form, not one field -->
-      <div v-if="signup.errors.signup" class="warn-box mb-4 !text-sm" role="alert">
-        {{ signup.errors.signup }}
+      <div v-if="register.errors.register" class="warn-box mb-4 !text-sm" role="alert">
+        {{ register.errors.register }}
       </div>
 
-      <form class="space-y-4" @submit.prevent="submitSignup">
-        <FormField label="Name" required :error="signup.errors.name">
-          <input v-model="signup.name" type="text" autocomplete="name" />
+      <form class="space-y-4" @submit.prevent="submitRegister">
+        <FormField label="Name" required :error="register.errors.name">
+          <input v-model="register.name" type="text" autocomplete="name" />
         </FormField>
 
-        <FormField label="Email" required :error="signup.errors.email">
-          <input v-model="signup.email" type="email" autocomplete="email" />
+        <FormField label="Email" required :error="register.errors.email">
+          <input v-model="register.email" type="email" autocomplete="email" />
         </FormField>
 
-        <FormField label="Password" required hint="At least 8 characters." :error="signup.errors.password">
-          <input v-model="signup.password" type="password" autocomplete="new-password" />
+        <FormField label="Password" required hint="At least 8 characters." :error="register.errors.password">
+          <input v-model="register.password" type="password" autocomplete="new-password" />
         </FormField>
 
-        <FormField label="Confirm password" required :error="signup.errors.password_confirmation">
-          <input v-model="signup.password_confirmation" type="password" autocomplete="new-password" />
+        <FormField label="Confirm password" required :error="register.errors.password_confirmation">
+          <input v-model="register.password_confirmation" type="password" autocomplete="new-password" />
         </FormField>
 
-        <button type="submit" class="btn w-full py-2.5" :disabled="signup.processing">
-          {{ signup.processing ? 'Sending request…' : 'Request account' }}
+        <button type="submit" class="btn w-full py-2.5" :disabled="register.processing">
+          {{ register.processing ? 'Creating account…' : 'Create account' }}
         </button>
       </form>
 

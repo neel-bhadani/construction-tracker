@@ -11,7 +11,7 @@ import { formatDate, signed, percent } from '@/lib/format'
  | weighted by work-days across the project's buildings, most behind is the
  | lowest current lead, expected handover the latest building forecast.
  */
-defineProps({ projects: Array, timezones: Array, defaultTimezone: String, can: Object })
+defineProps({ projects: Array, timezones: Array, defaultTimezone: String })
 
 const page = usePage()
 const editing = ref(undefined)     // undefined: closed, null: new, object: edit
@@ -41,14 +41,13 @@ const confirmDelete = () => {
 
 <template>
   <AppLayout title="Projects">
-    <div v-if="can.create" class="-mt-12 mb-5 flex justify-end">
+    <div class="-mt-12 mb-5 flex justify-end">
       <button class="btn" @click="editing = null">+ New project</button>
     </div>
 
     <p v-if="!projects.length" class="card max-w-lg p-7 text-sm text-slate-500">
       <span class="block text-lg font-semibold text-slate-900">No projects yet.</span>
-      <span v-if="can.create">Create one with “+ New project”, then add its buildings.</span>
-      <span v-else>An editor or admin can create the first one.</span>
+      Create one with “+ New project”, then add its buildings.
     </p>
 
     <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -78,10 +77,8 @@ const confirmDelete = () => {
 
         <div class="mt-auto flex gap-2 pt-4">
           <Link :href="`/projects/${p.id}`" class="btn-ghost flex-1">Open</Link>
-          <template v-if="can.manage">
-            <button class="btn-ghost" @click="editing = p">Edit</button>
-            <button class="btn-ghost hover:!text-rose-700" @click="openDelete(p)">Delete</button>
-          </template>
+          <button class="btn-ghost" @click="editing = p">Edit</button>
+          <button class="btn-ghost hover:!text-rose-700" @click="openDelete(p)">Delete</button>
         </div>
       </div>
     </div>

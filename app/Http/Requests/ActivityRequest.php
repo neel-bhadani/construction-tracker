@@ -6,10 +6,12 @@ use App\Data\SchedulePreview;
 use App\Http\Requests\Concerns\ValidatesChain;
 use App\Models\Activity;
 use App\Models\Building;
+use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Gate;
 
 /**
- * Adding or editing an activity: admin only, because every field here can reshape the plan.
+ * Adding or editing an activity in a building the account owns.
  */
 class ActivityRequest extends FormRequest
 {
@@ -17,11 +19,12 @@ class ActivityRequest extends FormRequest
 
     public ?SchedulePreview $preview = null;
 
-    public function authorize(): bool
+    /** A Response, so the owner's-only refusal stays a 404. */
+    public function authorize(): Response
     {
         return $this->activity()
-            ? $this->user()->can('update', $this->activity())
-            : $this->user()->can('create', Activity::class);
+            ? Gate::inspect('update', $this->activity())
+            : Gate::inspect('create', [Activity::class, $this->building()]);
     }
 
     /**

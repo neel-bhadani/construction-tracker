@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Models\Activity;
 use App\Models\Building;
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -17,8 +16,6 @@ class SchedulePreviewTest extends TestCase
 {
     use RefreshDatabase;
 
-    private User $admin;
-
     private Building $towerA;
 
     protected function setUp(): void
@@ -26,7 +23,6 @@ class SchedulePreviewTest extends TestCase
         parent::setUp();
 
         $this->seedClientWorkbooks();
-        $this->admin = User::factory()->admin()->create();
         $this->towerA = Building::where('name', 'Tower A')->sole();
     }
 
@@ -35,8 +31,8 @@ class SchedulePreviewTest extends TestCase
         $plaster = $this->activity('INT. & EXT. PLASTER 75');
         $before = $this->snapshot();
 
-        $this->actingAs($this->admin)->postJson("/activities/{$plaster->id}/preview", $this->chain($plaster, ['offset_days' => 82]))->assertOk();
-        $this->actingAs($this->admin)->postJson("/buildings/{$this->towerA->id}/activities/preview", ['predecessor_id' => $plaster->id, 'offset_days' => 5, 'date_adjustment_days' => 0])->assertOk();
+        $this->actingAs($this->owner())->postJson("/activities/{$plaster->id}/preview", $this->chain($plaster, ['offset_days' => 82]))->assertOk();
+        $this->actingAs($this->owner())->postJson("/buildings/{$this->towerA->id}/activities/preview", ['predecessor_id' => $plaster->id, 'offset_days' => 5, 'date_adjustment_days' => 0])->assertOk();
 
         $this->assertSame($before, $this->snapshot());
     }
@@ -50,11 +46,11 @@ class SchedulePreviewTest extends TestCase
         $plaster = $this->activity('INT. & EXT. PLASTER 75');
         $before = $this->plannedDates();
 
-        $preview = $this->actingAs($this->admin)
+        $preview = $this->actingAs($this->owner())
             ->postJson("/activities/{$plaster->id}/preview", $this->chain($plaster, ['offset_days' => 82]))
             ->assertOk()->json();
 
-        $this->actingAs($this->admin)->patch("/activities/{$plaster->id}", [
+        $this->actingAs($this->owner())->patch("/activities/{$plaster->id}", [
             ...$this->chain($plaster, ['offset_days' => 82]),
             'description' => $plaster->description, 'adjustment_reason' => null, 'is_break' => false, 'notes' => null,
         ])->assertSessionHasNoErrors();
@@ -72,7 +68,7 @@ class SchedulePreviewTest extends TestCase
     {
         $handover = $this->activity('FLAT HANDOVER');
 
-        $this->actingAs($this->admin)
+        $this->actingAs($this->owner())
             ->postJson("/buildings/{$this->towerA->id}/activities/preview", ['predecessor_id' => $handover->id, 'offset_days' => 14, 'date_adjustment_days' => 0])
             ->assertOk()
             ->assertExactJson(['plannedDate' => '2028-08-19', 'changedCount' => 0, 'finishBefore' => '2028-08-05', 'finishAfter' => '2028-08-19']);
@@ -83,7 +79,7 @@ class SchedulePreviewTest extends TestCase
     {
         $slab = $this->activity('3rd SLAB 15');
 
-        $this->actingAs($this->admin)
+        $this->actingAs($this->owner())
             ->postJson("/activities/{$slab->id}/preview", $this->chain($slab, ['date_adjustment_days' => 4]))
             ->assertOk()
             ->assertJson(['changedCount' => 0, 'finishBefore' => '2028-08-05', 'finishAfter' => '2028-08-05']);
@@ -94,7 +90,7 @@ class SchedulePreviewTest extends TestCase
         $first = $this->activity('1st SLAB');
         $third = $this->activity('3rd SLAB 15');
 
-        $response = $this->actingAs($this->admin)
+        $response = $this->actingAs($this->owner())
             ->postJson("/activities/{$first->id}/preview", $this->chain($first, ['predecessor_id' => $third->id]))
             ->assertUnprocessable()
             ->assertJsonMissingPath('changedCount');

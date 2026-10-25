@@ -7,7 +7,7 @@ import { formatDate } from '@/lib/format'
 import { requestJson } from '@/lib/http'
 
 /*
- | Admin only: every field here can reshape the plan. Before saving it shows
+ | Every field here can reshape the plan, so before saving it shows
  | what will move. The server works that out with the recalculator's own walk
  | over the proposed graph, writing nothing, and refuses a cycle with the
  | activities named. The same check runs again on save.

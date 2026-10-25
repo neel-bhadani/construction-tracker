@@ -30,7 +30,7 @@ class BuildingMetricsTest extends TestCase
     {
         parent::setUp();
 
-        $project = Project::create(['name' => 'Test project', 'planned_start_date' => '2026-04-05']);
+        $project = Project::create(['owner_id' => $this->owner()->id, 'name' => 'Test project', 'planned_start_date' => '2026-04-05']);
         $this->scope = Building::create(['project_id' => $project->id, 'name' => 'Test scope']);
         $this->travelTo('2026-10-15');
     }

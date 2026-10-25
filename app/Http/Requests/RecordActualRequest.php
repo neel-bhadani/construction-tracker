@@ -3,18 +3,19 @@
 namespace App\Http\Requests;
 
 use App\Services\ScheduleDays;
+use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Gate;
 
 /**
- * Recording, changing or clearing an actual date: editor and admin. It records something that
- * happened, so it cannot be in the future (today in the project's timezone) or before the
+ * Recording, changing or clearing an actual date. It records something that happened, so it cannot be in the future (today in the project's timezone) or before the
  * building's actual start.
  */
 class RecordActualRequest extends FormRequest
 {
-    public function authorize(): bool
+    public function authorize(): Response
     {
-        return $this->user()->can('recordActual', $this->route('activity'));
+        return Gate::inspect('recordActual', $this->route('activity'));
     }
 
     /**

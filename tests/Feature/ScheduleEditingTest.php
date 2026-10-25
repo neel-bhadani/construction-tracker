@@ -20,10 +20,6 @@ class ScheduleEditingTest extends TestCase
 {
     use RefreshDatabase;
 
-    private User $admin;
-
-    private User $editor;
-
     private Building $towerA;
 
     protected function setUp(): void
@@ -32,8 +28,6 @@ class ScheduleEditingTest extends TestCase
 
         $this->seedClientWorkbooks();
         $this->travelTo(CarbonImmutable::parse('2026-10-15 12:00', 'Asia/Kolkata'));
-        $this->admin = User::factory()->admin()->create();
-        $this->editor = User::factory()->editor()->create();
         $this->towerA = Building::where('name', 'Tower A')->sole();
     }
 
@@ -44,14 +38,14 @@ class ScheduleEditingTest extends TestCase
         $slab = $this->activity('1st SLAB');
         $planned = $this->plannedDates();
 
-        $this->actingAs($this->editor)->patch("/activities/{$slab->id}/actual", ['actual_date' => '2026-10-10', 'notes' => 'Poured a day late'])
+        $this->actingAs($this->owner())->patch("/activities/{$slab->id}/actual", ['actual_date' => '2026-10-10', 'notes' => 'Poured a day late'])
             ->assertSessionHasNoErrors();
 
         $this->assertSame('2026-10-10', $slab->fresh()->actual_date->toDateString());
         $this->assertSame($planned, $this->plannedDates());
         $this->assertSame([
-            ['actual_date', null, '2026-10-10', $this->editor->id],
-            ['notes', null, 'Poured a day late', $this->editor->id],
+            ['actual_date', null, '2026-10-10', $this->owner()->id],
+            ['notes', null, 'Poured a day late', $this->owner()->id],
         ], $this->revisions($slab));
     }
 
@@ -59,11 +53,11 @@ class ScheduleEditingTest extends TestCase
     {
         $first = $this->activity('DAY 1 TO GF SLAB - 180 DAYS');
 
-        $this->actingAs($this->editor)->patch("/activities/{$first->id}/actual", ['actual_date' => null, 'notes' => null])
+        $this->actingAs($this->owner())->patch("/activities/{$first->id}/actual", ['actual_date' => null, 'notes' => null])
             ->assertSessionHasNoErrors();
 
         $this->assertNull($first->fresh()->actual_date);
-        $this->assertSame([['actual_date', '2026-09-20', null, $this->editor->id]], $this->revisions($first));
+        $this->assertSame([['actual_date', '2026-09-20', null, $this->owner()->id]], $this->revisions($first));
     }
 
     /** The clock is 2026-10-15 in Kolkata: today is allowed, tomorrow is not. */
@@ -72,11 +66,11 @@ class ScheduleEditingTest extends TestCase
         $slab = $this->activity('1st SLAB');
         $this->travelTo(CarbonImmutable::parse('2026-10-15 01:00', 'Asia/Kolkata'));
 
-        $this->actingAs($this->editor)->patch("/activities/{$slab->id}/actual", ['actual_date' => '2026-10-16'])
+        $this->actingAs($this->owner())->patch("/activities/{$slab->id}/actual", ['actual_date' => '2026-10-16'])
             ->assertSessionHasErrors(['actual_date' => 'The actual date cannot be in the future.']);
-        $this->actingAs($this->editor)->patch("/activities/{$slab->id}/actual", ['actual_date' => '2026-04-04'])
+        $this->actingAs($this->owner())->patch("/activities/{$slab->id}/actual", ['actual_date' => '2026-04-04'])
             ->assertSessionHasErrors('actual_date');
-        $this->actingAs($this->editor)->patch("/activities/{$slab->id}/actual", ['actual_date' => '2026-10-15'])
+        $this->actingAs($this->owner())->patch("/activities/{$slab->id}/actual", ['actual_date' => '2026-10-15'])
             ->assertSessionHasNoErrors();
 
         $this->assertSame('2026-10-15', $slab->fresh()->actual_date->toDateString());
@@ -93,13 +87,13 @@ class ScheduleEditingTest extends TestCase
         $plaster = $this->activity('INT. & EXT. PLASTER 75');
         $before = $this->plannedDates();
 
-        $this->actingAs($this->admin)->patch("/activities/{$plaster->id}", $this->plan($plaster, ['offset_days' => 82]))
+        $this->actingAs($this->owner())->patch("/activities/{$plaster->id}", $this->plan($plaster, ['offset_days' => 82]))
             ->assertSessionHasNoErrors();
 
         $moved = array_keys(array_diff_assoc($this->plannedDates(), $before));
         $this->assertGreaterThan(25, count($moved));
         $this->assertSame('2028-08-12', Activity::where('building_id', $this->towerA->id)->max('planned_date'));
-        $this->assertSame([['offset_days', '75', '82', $this->admin->id]], $this->revisions($plaster));
+        $this->assertSame([['offset_days', '75', '82', $this->owner()->id]], $this->revisions($plaster));
         $this->assertSame(1, ActivityRevision::count());
     }
 
@@ -107,7 +101,7 @@ class ScheduleEditingTest extends TestCase
     {
         $slab = $this->activity('3rd SLAB 15');
 
-        $this->actingAs($this->admin)->patch("/activities/{$slab->id}", $this->plan($slab, [
+        $this->actingAs($this->owner())->patch("/activities/{$slab->id}", $this->plan($slab, [
             'description' => '3rd SLAB 16',
             'offset_days' => 16,
             'date_adjustment_days' => 2,
@@ -117,12 +111,12 @@ class ScheduleEditingTest extends TestCase
         ]))->assertSessionHasNoErrors();
 
         $this->assertEqualsCanonicalizing([
-            ['offset_days', '15', '16', $this->admin->id],
-            ['date_adjustment_days', '0', '2', $this->admin->id],
-            ['adjustment_reason', null, 'Crane booked late', $this->admin->id],
-            ['description', '3rd SLAB 15', '3rd SLAB 16', $this->admin->id],
-            ['is_break', 'false', 'true', $this->admin->id],
-            ['notes', null, 'See site diary', $this->admin->id],
+            ['offset_days', '15', '16', $this->owner()->id],
+            ['date_adjustment_days', '0', '2', $this->owner()->id],
+            ['adjustment_reason', null, 'Crane booked late', $this->owner()->id],
+            ['description', '3rd SLAB 15', '3rd SLAB 16', $this->owner()->id],
+            ['is_break', 'false', 'true', $this->owner()->id],
+            ['notes', null, 'See site diary', $this->owner()->id],
         ], $this->revisions($slab));
     }
 
@@ -130,7 +124,7 @@ class ScheduleEditingTest extends TestCase
     {
         $slab = $this->activity('3rd SLAB 15');
 
-        $this->actingAs($this->admin)->patch("/activities/{$slab->id}", $this->plan($slab))->assertSessionHasNoErrors();
+        $this->actingAs($this->owner())->patch("/activities/{$slab->id}", $this->plan($slab))->assertSessionHasNoErrors();
 
         $this->assertSame(0, ActivityRevision::count());
     }
@@ -140,10 +134,10 @@ class ScheduleEditingTest extends TestCase
         $slab = $this->activity('3rd SLAB 15');
         $diwali = $this->activity('DIWALI (08-11-2026) BREAK 20');
 
-        $this->actingAs($this->admin)->patch("/activities/{$slab->id}", $this->plan($slab, ['date_adjustment_days' => 3, 'adjustment_reason' => '']))
+        $this->actingAs($this->owner())->patch("/activities/{$slab->id}", $this->plan($slab, ['date_adjustment_days' => 3, 'adjustment_reason' => '']))
             ->assertSessionHasErrors('adjustment_reason');
 
-        $this->actingAs($this->admin)->patch("/activities/{$diwali->id}", $this->plan($diwali, ['date_adjustment_days' => 0]))
+        $this->actingAs($this->owner())->patch("/activities/{$diwali->id}", $this->plan($diwali, ['date_adjustment_days' => 0]))
             ->assertSessionHasNoErrors();
         $this->assertNull($diwali->fresh()->adjustment_reason);
     }
@@ -153,9 +147,9 @@ class ScheduleEditingTest extends TestCase
         $slab = $this->activity('3rd SLAB 15');
         $towerB = Activity::where('building_id', Building::where('name', 'Tower B')->sole()->id)->first();
 
-        $this->actingAs($this->admin)->patch("/activities/{$slab->id}", $this->plan($slab, ['predecessor_id' => $towerB->id]))
+        $this->actingAs($this->owner())->patch("/activities/{$slab->id}", $this->plan($slab, ['predecessor_id' => $towerB->id]))
             ->assertSessionHasErrors(['predecessor_id' => 'Choose an activity from this building.']);
-        $this->actingAs($this->admin)->patch("/activities/{$slab->id}", $this->plan($slab, ['predecessor_id' => $slab->id]))
+        $this->actingAs($this->owner())->patch("/activities/{$slab->id}", $this->plan($slab, ['predecessor_id' => $slab->id]))
             ->assertSessionHasErrors(['predecessor_id' => 'An activity cannot follow itself.']);
     }
 
@@ -165,7 +159,7 @@ class ScheduleEditingTest extends TestCase
         $third = $this->activity('3rd SLAB 15');
         $before = $this->snapshot();
 
-        $this->actingAs($this->admin)->patch("/activities/{$first->id}", $this->plan($first, ['predecessor_id' => $third->id]))
+        $this->actingAs($this->owner())->patch("/activities/{$first->id}", $this->plan($first, ['predecessor_id' => $third->id]))
             ->assertSessionHasErrors('predecessor_id');
 
         $message = session('errors')->first('predecessor_id');
@@ -182,7 +176,7 @@ class ScheduleEditingTest extends TestCase
     {
         $handover = $this->activity('FLAT HANDOVER');
 
-        $this->actingAs($this->admin)->post("/buildings/{$this->towerA->id}/activities", [
+        $this->actingAs($this->owner())->post("/buildings/{$this->towerA->id}/activities", [
             'description' => 'SNAG LIST', 'predecessor_id' => $handover->id, 'offset_days' => 14,
             'date_adjustment_days' => 0, 'adjustment_reason' => null, 'is_break' => false, 'notes' => null,
         ])->assertSessionHasNoErrors();
@@ -190,9 +184,9 @@ class ScheduleEditingTest extends TestCase
         $added = Activity::where('description', 'SNAG LIST')->sole();
         $this->assertSame([867, '2028-08-19', 56], [$added->planned_day, $added->planned_date->toDateString(), $added->sort_order]);
         $this->assertSame([
-            ['created', null, 'SNAG LIST', $this->admin->id],
-            ['predecessor_id', null, (string) $handover->id, $this->admin->id],
-            ['offset_days', null, '14', $this->admin->id],
+            ['created', null, 'SNAG LIST', $this->owner()->id],
+            ['predecessor_id', null, (string) $handover->id, $this->owner()->id],
+            ['offset_days', null, '14', $this->owner()->id],
         ], $this->revisions($added));
     }
 
@@ -201,7 +195,7 @@ class ScheduleEditingTest extends TestCase
         $fireNoc = $this->activity('FIRE NOC AND LIFT NOC 45');
         $before = $this->snapshot();
 
-        $this->actingAs($this->admin)->delete("/activities/{$fireNoc->id}")
+        $this->actingAs($this->owner())->delete("/activities/{$fireNoc->id}")
             ->assertSessionHasErrors('activity');
 
         $message = session('errors')->first('activity');
@@ -215,9 +209,9 @@ class ScheduleEditingTest extends TestCase
     public function test_deleting_a_leaf_keeps_its_audit_trail_and_records_the_deletion(): void
     {
         $handover = $this->activity('FLAT HANDOVER');
-        $this->actingAs($this->editor)->patch("/activities/{$handover->id}/actual", ['actual_date' => null, 'notes' => 'Keys ready']);
+        $this->actingAs($this->owner())->patch("/activities/{$handover->id}/actual", ['actual_date' => null, 'notes' => 'Keys ready']);
 
-        $this->actingAs($this->admin)->delete("/activities/{$handover->id}")->assertSessionHasNoErrors();
+        $this->actingAs($this->owner())->delete("/activities/{$handover->id}")->assertSessionHasNoErrors();
 
         $this->assertNull(Activity::find($handover->id));
         $this->assertSame([
@@ -231,11 +225,11 @@ class ScheduleEditingTest extends TestCase
     {
         $handover = $this->activity('FLAT HANDOVER');
         $foyer = $this->activity('TOWER A: ENTRANCE FOYER');
-        $this->actingAs($this->editor)->patch("/activities/{$handover->id}/actual", ['actual_date' => null, 'notes' => 'Keys ready']);
-        $this->actingAs($this->editor)->patch("/activities/{$foyer->id}/actual", ['actual_date' => null, 'notes' => 'Marble chosen']);
+        $this->actingAs($this->owner())->patch("/activities/{$handover->id}/actual", ['actual_date' => null, 'notes' => 'Keys ready']);
+        $this->actingAs($this->owner())->patch("/activities/{$foyer->id}/actual", ['actual_date' => null, 'notes' => 'Marble chosen']);
 
-        $this->actingAs($this->admin)->delete("/activities/{$handover->id}")->assertSessionHasNoErrors();
-        $this->actingAs($this->admin)->delete("/activities/{$foyer->id}")->assertSessionHasNoErrors();
+        $this->actingAs($this->owner())->delete("/activities/{$handover->id}")->assertSessionHasNoErrors();
+        $this->actingAs($this->owner())->delete("/activities/{$foyer->id}")->assertSessionHasNoErrors();
 
         $history = fn (int $id) => ActivityRevision::where('activity_snapshot_id', $id)->orderBy('id')->get()
             ->map(fn ($r) => [$r->activity_id, $r->field, $r->old_value, $r->new_value])->all();
@@ -247,8 +241,8 @@ class ScheduleEditingTest extends TestCase
     public function test_every_revision_carries_its_activity_id_snapshot(): void
     {
         $slab = $this->activity('3rd SLAB 15');
-        $this->actingAs($this->admin)->patch("/activities/{$slab->id}", $this->plan($slab, ['offset_days' => 16, 'notes' => 'x']));
-        $this->actingAs($this->admin)->post("/buildings/{$this->towerA->id}/activities", [
+        $this->actingAs($this->owner())->patch("/activities/{$slab->id}", $this->plan($slab, ['offset_days' => 16, 'notes' => 'x']));
+        $this->actingAs($this->owner())->post("/buildings/{$this->towerA->id}/activities", [
             'description' => 'NEW', 'predecessor_id' => null, 'offset_days' => 1,
             'date_adjustment_days' => 0, 'adjustment_reason' => null, 'is_break' => false, 'notes' => null,
         ]);
@@ -266,7 +260,7 @@ class ScheduleEditingTest extends TestCase
         $before = $this->plannedDates(null);
         $towerADates = $this->plannedDates();
 
-        $this->actingAs($this->admin)->patch("/projects/{$this->towerA->project_id}/buildings/{$this->towerA->id}/dates", ['planned_start_date' => '2026-04-15', 'actual_start_date' => null])
+        $this->actingAs($this->owner())->patch("/projects/{$this->towerA->project_id}/buildings/{$this->towerA->id}/dates", ['planned_start_date' => '2026-04-15', 'actual_start_date' => null])
             ->assertSessionHasNoErrors();
 
         $after = $this->plannedDates(null);
@@ -275,7 +269,7 @@ class ScheduleEditingTest extends TestCase
             $expected = array_key_exists($id, $towerADates) ? CarbonImmutable::parse($date)->addDays(10)->toDateString() : $date;
             $this->assertSame($expected, $after[$id]);
         }
-        $this->assertSame([['planned_start_date', '2026-04-05', '2026-04-15', $this->admin->id]],
+        $this->assertSame([['planned_start_date', '2026-04-05', '2026-04-15', $this->owner()->id]],
             BuildingRevision::where('building_id', $this->towerA->id)->get()->map(fn ($r) => [$r->field, $r->old_value, $r->new_value, $r->user_id])->all());
         $this->assertSame(0, BuildingRevision::where('building_id', $towerB->id)->count());
         $this->assertSame(0, ActivityRevision::count());
@@ -285,7 +279,7 @@ class ScheduleEditingTest extends TestCase
     {
         $towerB = Building::where('name', 'Tower B')->sole();
 
-        $this->actingAs($this->admin)->patch("/projects/{$towerB->project_id}/buildings/{$towerB->id}/dates", ['planned_start_date' => '2026-04-05', 'actual_start_date' => '2026-09-25'])
+        $this->actingAs($this->owner())->patch("/projects/{$towerB->project_id}/buildings/{$towerB->id}/dates", ['planned_start_date' => '2026-04-05', 'actual_start_date' => '2026-09-25'])
             ->assertSessionHasErrors('actual_start_date');
 
         $message = session('errors')->first('actual_start_date');
@@ -301,7 +295,7 @@ class ScheduleEditingTest extends TestCase
     {
         $before = $this->plannedDates(null);
 
-        $this->actingAs($this->admin)->patch("/projects/{$this->towerA->project_id}/buildings/{$this->towerA->id}/dates", ['planned_start_date' => '2026-04-05', 'actual_start_date' => '2026-05-09'])
+        $this->actingAs($this->owner())->patch("/projects/{$this->towerA->project_id}/buildings/{$this->towerA->id}/dates", ['planned_start_date' => '2026-04-05', 'actual_start_date' => '2026-05-09'])
             ->assertSessionHasNoErrors();
 
         $this->assertSame('2026-05-09', $this->towerA->fresh()->actual_start_date->toDateString());
@@ -309,12 +303,12 @@ class ScheduleEditingTest extends TestCase
         $this->assertSame($before, $this->plannedDates(null));
     }
 
-    public function test_editor_cannot_change_a_buildings_start_dates(): void
+    public function test_another_account_cannot_change_a_buildings_start_dates(): void
     {
         $before = $this->plannedDates(null);
 
-        $this->actingAs($this->editor)->patch("/projects/{$this->towerA->project_id}/buildings/{$this->towerA->id}/dates", ['planned_start_date' => '2026-04-15', 'actual_start_date' => null])
-            ->assertForbidden();
+        $this->actingAs(User::factory()->create())->patch("/projects/{$this->towerA->project_id}/buildings/{$this->towerA->id}/dates", ['planned_start_date' => '2026-04-15', 'actual_start_date' => null])
+            ->assertNotFound();
 
         $this->assertSame($before, $this->plannedDates(null));
         $this->assertSame(0, BuildingRevision::count());

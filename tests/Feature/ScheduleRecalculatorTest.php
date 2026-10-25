@@ -29,7 +29,7 @@ class ScheduleRecalculatorTest extends TestCase
     {
         parent::setUp();
 
-        $this->project = Project::create(['name' => 'Test project', 'planned_start_date' => '2026-04-05']);
+        $this->project = Project::create(['owner_id' => $this->owner()->id, 'name' => 'Test project', 'planned_start_date' => '2026-04-05']);
         $this->scope = Building::create(['project_id' => $this->project->id, 'name' => 'Tower A']);
     }
 

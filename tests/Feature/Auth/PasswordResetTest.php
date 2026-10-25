@@ -3,7 +3,6 @@
 namespace Tests\Feature\Auth;
 
 use App\Http\Controllers\Auth\PasswordResetController;
-use App\Http\Requests\Auth\LoginRequest;
 use App\Models\User;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -90,23 +89,5 @@ class PasswordResetTest extends TestCase
         ])->assertSessionHasErrors('email');
 
         $this->assertTrue(Hash::check('password', $user->fresh()->password));
-    }
-
-    public function test_resetting_a_password_does_not_approve_the_account(): void
-    {
-        $user = User::factory()->unapproved()->create();
-        $token = Password::createToken($user);
-
-        $this->post('/reset-password', [
-            'token' => $token,
-            'email' => $user->email,
-            'password' => 'brand-new-password',
-            'password_confirmation' => 'brand-new-password',
-        ])->assertRedirect('/login');
-
-        $this->assertNull($user->fresh()->approved_at);
-        $this->post('/login', ['email' => $user->email, 'password' => 'brand-new-password'])
-            ->assertSessionHasErrors(['approval' => LoginRequest::AWAITING_APPROVAL]);
-        $this->assertGuest();
     }
 }

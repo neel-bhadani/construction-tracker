@@ -11,11 +11,11 @@ import BuildingDatesModal from '@/Components/BuildingDatesModal.vue'
 import { formatDate, signed, percent, leadWord } from '@/lib/format'
 
 /*
- | One building's timeline. Every figure is the server's — ScopeMetricsService and
+ | One building's timeline. Every figure is the server's — BuildingMetricsService and
  | LeadProjectionService output, passed through as it is. This page lays the
  | three per-row lists side by side by id and formats them; it calculates
- | nothing. The `can` flags only decide what is shown: each endpoint is
- | authorised by its policy whatever this page offers.
+ | nothing. Only the project's owner ever reaches it, and every endpoint
+ | checks that again.
  */
 const props = defineProps({
   project: Object,
@@ -26,7 +26,6 @@ const props = defineProps({
   chart: Object,
   activities: Array,
   today: String,
-  can: Object,
 })
 
 const page = usePage()
@@ -96,8 +95,8 @@ const openDelete = row => { deleteError.value = ''; deleting.value = row }
       </nav>
 
       <div class="ml-auto flex gap-2">
-        <button v-if="can.updateBuildingDates" class="btn-ghost" @click="showBuildingDates = true">Building dates</button>
-        <button v-if="can.manageActivities" class="btn" @click="editing = {}">Add activity</button>
+        <button class="btn-ghost" @click="showBuildingDates = true">Building dates</button>
+        <button class="btn" @click="editing = {}">Add activity</button>
       </div>
     </div>
 
@@ -147,7 +146,7 @@ const openDelete = row => { deleteError.value = ''; deleting.value = row }
             <th class="px-3 py-3 text-right">Ahead / behind</th>
             <th class="px-3 py-3">Status</th>
             <th class="px-3 py-3">Forecast</th>
-            <th v-if="can.recordActual || can.manageActivities" class="px-4 py-3"><span class="sr-only">Actions</span></th>
+            <th class="px-4 py-3"><span class="sr-only">Actions</span></th>
           </tr>
         </thead>
         <tbody>
@@ -172,11 +171,11 @@ const openDelete = row => { deleteError.value = ''; deleting.value = row }
             </td>
             <td class="px-3 py-2.5"><StatusChip :status="row.status" /></td>
             <td class="whitespace-nowrap px-3 py-2.5">{{ row.actualDate ? '' : formatDate(row.actualOrForecast) }}</td>
-            <td v-if="can.recordActual || can.manageActivities" class="whitespace-nowrap px-4 py-2 text-right">
+            <td class="whitespace-nowrap px-4 py-2 text-right">
               <div class="flex justify-end gap-1.5">
-                <button v-if="can.recordActual" class="btn-xs" @click="recording = row">Actual</button>
-                <button v-if="can.manageActivities" class="btn-xs" @click="editing = row">Edit</button>
-                <button v-if="can.manageActivities" class="btn-xs hover:!border-rose-600 hover:!text-rose-700" @click="openDelete(row)">Delete</button>
+                <button class="btn-xs" @click="recording = row">Actual</button>
+                <button class="btn-xs" @click="editing = row">Edit</button>
+                <button class="btn-xs hover:!border-rose-600 hover:!text-rose-700" @click="openDelete(row)">Delete</button>
               </div>
             </td>
           </tr>
@@ -209,10 +208,10 @@ const openDelete = row => { deleteError.value = ''; deleting.value = row }
           </template>
         </dl>
         <p v-if="row.date_adjustment_days" class="mt-2 text-xs text-amber-900">Adjusted: {{ row.adjustment_reason }}</p>
-        <div v-if="can.recordActual || can.manageActivities" class="mt-3 flex gap-2">
-          <button v-if="can.recordActual" class="btn-ghost flex-1" @click="recording = row">Record actual</button>
-          <button v-if="can.manageActivities" class="btn-ghost" @click="editing = row">Edit</button>
-          <button v-if="can.manageActivities" class="btn-ghost" @click="openDelete(row)">Delete</button>
+        <div class="mt-3 flex gap-2">
+          <button class="btn-ghost flex-1" @click="recording = row">Record actual</button>
+          <button class="btn-ghost" @click="editing = row">Edit</button>
+          <button class="btn-ghost" @click="openDelete(row)">Delete</button>
         </div>
       </div>
     </div>
@@ -227,7 +226,7 @@ const openDelete = row => { deleteError.value = ''; deleting.value = row }
                    :processing="deleteProcessing"
                    :message="deleteError || (deleting ? `Delete [${deleting.description}]? Its history is kept in the audit trail.` : '')"
                    @close="deleting = null" @confirm="confirmDelete" />
-    <BuildingDatesModal v-if="can.updateBuildingDates" :show="showBuildingDates" :project-id="project.id" :building="building"
+    <BuildingDatesModal :show="showBuildingDates" :project-id="project.id" :building="building"
                         @close="showBuildingDates = false" />
   </AppLayout>
 </template>

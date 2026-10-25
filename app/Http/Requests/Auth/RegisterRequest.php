@@ -4,13 +4,13 @@ namespace App\Http\Requests\Auth;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 
 /**
- * A stranger asking for an account. Nothing this form accepts lets anybody in: role and
- * approved_at are set by SignupController, never read from input.
+ * A new account. Only name, email and password are read from the form.
  */
-class SignupRequest extends FormRequest
+class RegisterRequest extends FormRequest
 {
     /** Submissions per IP per minute — the same five sign-in allows. */
     private const MAX_ATTEMPTS = 5;
@@ -42,7 +42,7 @@ class SignupRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'password' => ['required', 'string', Password::defaults(), 'confirmed'],
         ];
     }
 
@@ -76,9 +76,9 @@ class SignupRequest extends FormRequest
             $seconds = RateLimiter::availableIn($key);
 
             throw ValidationException::withMessages([
-                'signup' => $seconds < 120
-                    ? "Too many sign-up attempts. Please try again in {$seconds} seconds."
-                    : 'Too many sign-up attempts. Please try again in '.ceil($seconds / 60).' minutes.',
+                'register' => $seconds < 120
+                    ? "Too many attempts to register. Please try again in {$seconds} seconds."
+                    : 'Too many attempts to register. Please try again in '.ceil($seconds / 60).' minutes.',
             ]);
         }
     }
@@ -91,11 +91,11 @@ class SignupRequest extends FormRequest
 
     private function attemptsKey(): string
     {
-        return 'signup-attempts|'.$this->ip();
+        return 'register-attempts|'.$this->ip();
     }
 
     private function accountsKey(): string
     {
-        return 'signup-accounts|'.$this->ip();
+        return 'register-accounts|'.$this->ip();
     }
 }

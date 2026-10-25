@@ -2,52 +2,44 @@
 
 namespace App\Policies;
 
-use App\Enums\Role;
 use App\Models\Project;
 use App\Models\User;
 use Illuminate\Auth\Access\Response;
 
 /**
- * viewer: read. editor and admin: add, edit and delete projects. Roles are global, not per project.
+ * The owner can do everything with a project; to anyone else it does not exist, so the refusal
+ * is a 404, never a 403 that would confirm the id is taken.
  */
 class ProjectPolicy
 {
-    /** An unapproved account can do nothing, whatever its role says. */
-    public function before(User $user): ?bool
-    {
-        return $user->approved_at === null ? false : null;
-    }
-
     public function viewAny(User $user): bool
     {
         return true;
     }
 
-    public function view(User $user, Project $project): bool
+    public function view(User $user, Project $project): Response
+    {
+        return self::owns($user, $project);
+    }
+
+    public function create(User $user): bool
     {
         return true;
     }
 
-    public function create(User $user): Response
-    {
-        return $this->manages($user);
-    }
-
-    /** Name, details, timezone and the default start for new buildings — which moves nothing. */
     public function update(User $user, Project $project): Response
     {
-        return $this->manages($user);
+        return self::owns($user, $project);
     }
 
     public function delete(User $user, Project $project): Response
     {
-        return $this->manages($user);
+        return self::owns($user, $project);
     }
 
-    private function manages(User $user): Response
+    /** The one check behind every project, building and activity ability. */
+    public static function owns(User $user, ?Project $project): Response
     {
-        return in_array($user->role, [Role::Editor, Role::Admin], true)
-            ? Response::allow()
-            : Response::deny('Your role can view projects but not change them. Ask an editor or admin.');
+        return $project !== null && $project->isOwnedBy($user) ? Response::allow() : Response::denyAsNotFound();
     }
 }

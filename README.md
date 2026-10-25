@@ -5,7 +5,7 @@ reproducing them exactly: each building's schedule is a dependency graph, its pl
 the chain, and progress, pace, forecasts and lead follow the workbook's own formulas.
 
 - **Projects** hold **buildings**; a building is one timeline (a tower, or a project's common work).
-- Site staff record actual dates; admins shape the plan; every change is audited.
+- One account, its own data: whoever owns a project can do everything with it; every change is audited.
 - Same family as the Shaligram CRM: Laravel 13, Inertia, Vue 3, MySQL 8, Tailwind 4.
 
 Design and schema: [`docs/system-design.md`](docs/system-design.md) and
@@ -18,8 +18,8 @@ composer install
 npm install && npm run build
 cp .env.example .env && php artisan key:generate   # then set DB_* and MAIL_*
 php artisan migrate
-php artisan db:seed --class=WorkbookSeeder          # Shaligram Vrundavan: Tower A, Tower B, Overall Timeline
-php artisan user:create-admin                        # the first admin; never through sign-up
+php artisan user:create                               # an account; or register at /register
+SEED_OWNER_EMAIL=you@example.com php artisan db:seed --class=WorkbookSeeder   # Shaligram Vrundavan, owned by that account
 ```
 
 `WorkbookSeeder` parses the plan from the formulas in the client's workbooks and refuses to finish unless every one of
@@ -28,17 +28,17 @@ the 151 computed dates equals the workbook's own cell.
 **The client's workbooks are never in the repository.** They are read from `CLIENT_WORKBOOKS_DIR`
 (default `~/client-files/building-timeline/references`), and `docs/workbooks/` and `*.xlsx` are git-ignored.
 
-## Roles
+## Accounts
 
-Global, approved by an admin after sign-up (`/signup`). Accounts start as viewers.
+There are no roles. Registering at `/register` creates an account and signs it in; it can then do everything with
+the projects it owns, and nothing else exists for it: another account's project, building or activity is a 404 on
+every page and API route. `OwnershipTest` walks the route list and fails for any signed-in route without a case.
 
-| Role | Can |
-| --- | --- |
-| viewer | Read everything |
-| editor | Record and change actual dates and notes; add, edit and delete projects; add buildings (empty, copied or imported from Excel), rename, reorder and delete them |
-| admin | Everything: durations, predecessors, adjustments, a building's start dates, approving users. Roles are changed in the database for now; there is no screen for it yet |
-
-Every endpoint is checked by a policy; buttons are only hidden to match.
+- `REGISTRATION_OPEN` (default `true`). `false`: `/register` and the old `/signup` address answer 404 and the
+  sign-in page says nothing about signing up. `php artisan user:create` still adds an account.
+- `php artisan project:transfer {project id} {email}` hands a project to another account, in one transaction. It
+  refuses if that account already has a project of the same name.
+- "My profile" (the header menu): name, email, phone, and a password change that signs out every other session.
 
 ## Pages
 
@@ -47,6 +47,7 @@ Every endpoint is checked by a policy; buttons are only hidden to match.
 | `/projects` | Home: every project with % done, most-behind building, expected handover |
 | `/projects/{id}` | One project: a card per building, add / edit / reorder / delete buildings |
 | `/projects/{id}/buildings/{id}` | The building's timeline: status, the progress chart, activity table, record actual, edit plan with a preview of what moves |
+| `/profile` | My profile: details and password |
 
 ## Progress chart
 
@@ -65,7 +66,7 @@ pages.
 ## Tests
 
 ```bash
-php artisan test   # PHP: services, endpoints, policies, the workbook oracles
+php artisan test   # PHP: services, endpoints, ownership, the workbook oracles
 npm run test       # Vue: the progress chart (Vitest + jsdom, ECharts mocked)
 ```
 

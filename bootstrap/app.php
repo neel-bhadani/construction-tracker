@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Middleware\EnsureUserIsApproved;
+use App\Http\Middleware\EnsureRegistrationIsOpen;
 use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -19,7 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->alias([
-            'approved' => EnsureUserIsApproved::class,
+            'registration.open' => EnsureRegistrationIsOpen::class,
         ]);
 
         $middleware->redirectUsersTo('/');

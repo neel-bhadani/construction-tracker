@@ -36,6 +36,7 @@ class ProjectEditor
     {
         return DB::transaction(function () use ($data, $user) {
             $project = new Project($data);
+            $project->owner_id = $user->id;
             $project->created_by = $user->id;
             $project->save();
 

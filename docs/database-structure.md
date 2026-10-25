@@ -36,7 +36,8 @@ One row per client project. The first is Shaligram Vrundavan.
 | Column | Type | Null | Default | Notes |
 | --- | --- | --- | --- | --- |
 | `id` | bigint unsigned, auto | no | | PK |
-| `name` | varchar(150) | no | | Unique among projects that are not deleted |
+| `owner_id` | bigint unsigned | no | | FK → `users.id`, `ON DELETE RESTRICT`. The one account that sees and changes it |
+| `name` | varchar(150) | no | | Unique among the owner's projects that are not deleted |
 | `details` | text | yes | null | Free text |
 | `planned_start_date` | date | no | | **Only the default start of a new building.** Changing it moves nothing |
 | `timezone` | varchar(64) | no | `Asia/Kolkata` | Decides "today" for the project's buildings |
@@ -46,8 +47,9 @@ One row per client project. The first is Shaligram Vrundavan.
 | `deleted_at` | timestamp | yes | null | Soft delete |
 | `active_name` | varchar(150), generated | yes | | `IF(deleted_at IS NULL, name, NULL)`, stored |
 
-`UNIQUE (active_name)`. MySQL lets any number of NULLs share a unique index, so a plain `UNIQUE (name, deleted_at)`
-would not stop two live projects sharing a name; the generated column does, and frees a deleted project's name.
+`UNIQUE (owner_id, active_name)`. MySQL lets any number of NULLs share a unique index, so a plain
+`UNIQUE (owner_id, name, deleted_at)` would not stop two live projects of one owner sharing a name; the generated
+column does, and frees a deleted project's name.
 
 A project is deleted only once it has no buildings; the refusal names them.
 
@@ -203,20 +205,11 @@ Standard Laravel, plus:
 
 | Column | Type | Null | Default | Notes |
 | --- | --- | --- | --- | --- |
-| `role` | enum(`admin`,`editor`,`viewer`) | no | `viewer` | |
-| `approved_at` | timestamp | yes | null | Null = cannot sign in |
+| `phone` | varchar(30) | yes | null | Optional, from "My profile" |
 
-New registrations are created with `approved_at = null` and `role = viewer`. An admin approves them. Without
-this, anyone who finds the URL learns the project's handover dates.
-
-| Role | Can do |
-| --- | --- |
-| `viewer` | Read everything |
-| `editor` | Record and change `actual_date` |
-| `admin` | Everything: durations, predecessors, adjustments, project dates, user approval |
-
-The split matters. Changing `offset_days` moves every downstream date; recording an actual date moves nothing.
-Site staff should not be able to reshape the plan by accident.
+There are no roles and no approval (`role` and `approved_at` were dropped by
+`2026_10_25_000011_one_user_owner_only`). An account can do everything with the projects it owns, through
+`projects.owner_id`, and every policy refuses anyone else's with a 404.
 
 ---
 

@@ -16,8 +16,9 @@ class AuthenticatedSessionController extends Controller
     {
         return Inertia::render('Auth/Login', [
             'status' => session('status'),
-            // one page, two tabs; /signup opens the same page on the other one
+            // one page, two tabs; /register opens the same page on the other one
             'tab' => 'signin',
+            'canRegister' => (bool) config('auth.registration_open'),
         ]);
     }
 

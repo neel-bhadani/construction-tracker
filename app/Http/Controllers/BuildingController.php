@@ -6,7 +6,6 @@ use App\Exceptions\PlanImportException;
 use App\Http\Requests\BuildingDatesRequest;
 use App\Http\Requests\BuildingRequest;
 use App\Import\ImportUploads;
-use App\Models\Activity;
 use App\Models\Building;
 use App\Models\Project;
 use App\Services\BuildingChartService;
@@ -35,7 +34,6 @@ class BuildingController extends Controller
         Gate::authorize('view', $building);
 
         $buildingMetrics = $metrics->forBuilding($building);
-        $user = $request->user();
 
         return Inertia::render('Buildings/Show', [
             'project' => ['id' => $project->id, 'name' => $project->name],
@@ -55,12 +53,6 @@ class BuildingController extends Controller
             'activities' => $building->activities()->orderBy('sort_order')->orderBy('id')
                 ->get(['id', 'description', 'predecessor_id', 'offset_days', 'date_adjustment_days', 'adjustment_reason', 'is_break', 'notes']),
             'today' => ScheduleDays::toDate(ScheduleDays::currentDay(null, $project->timezone)),
-            // what to show; the policies on each endpoint are what actually decide
-            'can' => [
-                'recordActual' => $user->can('recordActual', new Activity),
-                'manageActivities' => $user->can('create', Activity::class),
-                'updateBuildingDates' => $user->can('updateDates', $building),
-            ],
         ]);
     }
 

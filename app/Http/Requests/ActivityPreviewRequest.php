@@ -6,11 +6,13 @@ use App\Data\SchedulePreview;
 use App\Http\Requests\Concerns\ValidatesChain;
 use App\Models\Activity;
 use App\Models\Building;
+use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Gate;
 
 /**
- * What a change would move, before it is saved. Policy-checked like the save itself: someone who
- * may not make the change may not probe what it would do.
+ * What a change would move, before it is saved. Policy-checked like the save itself: another
+ * account cannot probe what it would do.
  */
 class ActivityPreviewRequest extends FormRequest
 {
@@ -18,11 +20,12 @@ class ActivityPreviewRequest extends FormRequest
 
     public ?SchedulePreview $preview = null;
 
-    public function authorize(): bool
+    /** A Response, so the owner's-only refusal stays a 404. */
+    public function authorize(): Response
     {
         return $this->activity()
-            ? $this->user()->can('update', $this->activity())
-            : $this->user()->can('create', Activity::class);
+            ? Gate::inspect('update', $this->activity())
+            : Gate::inspect('create', [Activity::class, $this->building()]);
     }
 
     /**

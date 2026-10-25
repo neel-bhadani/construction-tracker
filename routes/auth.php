@@ -2,15 +2,14 @@
 
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\PasswordResetController;
-use App\Http\Controllers\Auth\SignupController;
+use App\Http\Controllers\Auth\RegisterController;
 use Illuminate\Support\Facades\Route;
 
 /*
- | Sign in, sign up, reset a forgotten password, sign out.
+ | Sign in, register, reset a forgotten password, sign out.
  |
- | Sign-up is a request for an account, not an account: the row it writes is a
- | viewer with approved_at null, and LoginRequest refuses it until an admin
- | approves it. There is deliberately no /register; nothing answers there.
+ | Registering makes a working account and signs it in. With REGISTRATION_OPEN
+ | false, /register and the old /signup address both answer 404.
  */
 
 Route::middleware('guest')->group(function () {
@@ -18,11 +17,14 @@ Route::middleware('guest')->group(function () {
     // rate limited inside LoginRequest, per email and IP
     Route::post('login', [AuthenticatedSessionController::class, 'store']);
 
-    // the same page as /login, opened on its Sign up tab
-    Route::get('signup', [SignupController::class, 'create'])->name('signup');
-    // rate limited inside SignupRequest, before validation runs
-    Route::post('signup', [SignupController::class, 'store'])->name('signup.store');
-    Route::get('signup/submitted', [SignupController::class, 'submitted'])->name('signup.submitted');
+    Route::middleware('registration.open')->group(function () {
+        // the same page as /login, opened on its Register tab
+        Route::get('register', [RegisterController::class, 'create'])->name('register');
+        // rate limited inside RegisterRequest, before validation runs
+        Route::post('register', [RegisterController::class, 'store'])->name('register.store');
+        // the address sign-up had before
+        Route::permanentRedirect('signup', '/register');
+    });
 
     Route::get('forgot-password', [PasswordResetController::class, 'request'])->name('password.request');
     Route::post('forgot-password', [PasswordResetController::class, 'email'])

@@ -16,8 +16,8 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 /**
- * Adding a building, with its plan empty, copied from another building in any project, or
- * imported from an uploaded workbook. Editing uses the same rules for name and type only.
+ * Adding a building, with its plan empty, copied from another building in any of the owner's
+ * projects, or imported from a workbook this session uploaded. Editing uses the same rules for name and type only.
  */
 class BuildingRequest extends FormRequest
 {
@@ -29,7 +29,7 @@ class BuildingRequest extends FormRequest
     {
         $building = $this->route('building');
 
-        return $building ? Gate::inspect('update', $building) : Gate::inspect('create', Building::class);
+        return $building ? Gate::inspect('update', $building) : Gate::inspect('create', [Building::class, $this->project()]);
     }
 
     /**
@@ -51,7 +51,8 @@ class BuildingRequest extends FormRequest
             ...$rules,
             'planned_start_date' => ['nullable', 'date_format:Y-m-d'],
             'plan' => ['required', Rule::in(['empty', 'copy', 'import'])],
-            'copy_from' => ['required_if:plan,copy', 'nullable', 'integer', Rule::exists('buildings', 'id')->whereNull('deleted_at')],
+            'copy_from' => ['required_if:plan,copy', 'nullable', 'integer', Rule::exists('buildings', 'id')->whereNull('deleted_at')
+                ->whereIn('project_id', $this->user()->projects()->select('id'))],
             'import_token' => ['required_if:plan,import', 'nullable', 'string'],
             'sheet' => ['required_if:plan,import', 'nullable', 'string', 'max:31'],
         ];
@@ -89,7 +90,11 @@ class BuildingRequest extends FormRequest
             }
 
             if ($this->input('plan') === 'import') {
-                $path = app(ImportUploads::class)->path($this->string('import_token')->toString());
+                $token = $this->string('import_token')->toString();
+                // only a file this session uploaded; a token from anyone else's reads as expired
+                $path = in_array($token, $this->session()->get(ImportUploads::SESSION_KEY, []), true)
+                    ? app(ImportUploads::class)->path($token)
+                    : null;
 
                 if ($path === null) {
                     $validator->errors()->add('import_token', 'The uploaded file has expired. Choose it again.');

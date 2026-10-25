@@ -9,6 +9,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rules\Password as PasswordRule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -17,8 +18,7 @@ use Inertia\Response;
  * Laravel's built-in password broker, without a starter kit.
  *
  * The request step gives one answer whether or not the address has an account; the broker's
- * own "We can't find a user" would let anyone ask which addresses exist. Resetting a password
- * does not approve an account: LoginRequest still refuses an unapproved one.
+ * own "We can't find a user" would let anyone ask which addresses exist.
  */
 class PasswordResetController extends Controller
 {
@@ -51,7 +51,7 @@ class PasswordResetController extends Controller
         $request->validate([
             'token' => ['required'],
             'email' => ['required', 'email'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'password' => ['required', 'string', PasswordRule::defaults(), 'confirmed'],
         ], [
             'password.min' => 'The password must be at least 8 characters.',
             'password.confirmed' => 'The two passwords do not match.',

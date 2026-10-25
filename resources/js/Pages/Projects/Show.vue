@@ -11,7 +11,7 @@ import { formatDate, signed, percent, leadWord } from '@/lib/format'
  | One project: a summary line and a card per building. Every figure is
  | ProjectSummaryService output.
  */
-const props = defineProps({ project: Object, timezones: Array, copySources: Array, can: Object })
+const props = defineProps({ project: Object, timezones: Array, copySources: Array })
 
 const editingProject = ref(false)
 const editingBuilding = ref(undefined)   // undefined: closed, null: add, object: edit
@@ -53,15 +53,15 @@ const confirmDelete = () => {
         · expected handover <b class="text-slate-900">{{ formatDate(project.expectedHandover) }}</b>
       </p>
       <div class="ml-auto flex gap-2">
-        <button v-if="can.manageProject" class="btn-ghost" @click="editingProject = true">Edit project</button>
-        <button v-if="can.manageBuildings" class="btn" @click="editingBuilding = null">+ Add building</button>
+        <button class="btn-ghost" @click="editingProject = true">Edit project</button>
+        <button class="btn" @click="editingBuilding = null">+ Add building</button>
       </div>
     </div>
     <p v-if="project.details" class="-mt-2 mb-5 max-w-3xl whitespace-pre-line text-sm text-slate-500">{{ project.details }}</p>
 
     <p v-if="!project.buildings.length" class="card max-w-lg p-7 text-sm text-slate-500">
       This project has no buildings yet.
-      <span v-if="can.manageBuildings">Add one with “+ Add building”: start it empty, copy another building's plan, or import it from Excel.</span>
+      Add one with “+ Add building”: start it empty, copy another building's plan, or import it from Excel.
     </p>
 
     <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -95,19 +95,17 @@ const confirmDelete = () => {
 
         <div class="mt-auto flex gap-2 pt-4">
           <Link :href="`/projects/${project.id}/buildings/${b.id}`" class="btn-ghost flex-1">Open timeline</Link>
-          <template v-if="can.manageBuildings">
-            <button class="btn-ghost !px-2.5" :disabled="index === 0" title="Move up" aria-label="Move up" @click="move(b, 'up')">↑</button>
-            <button class="btn-ghost !px-2.5" :disabled="index === project.buildings.length - 1" title="Move down" aria-label="Move down" @click="move(b, 'down')">↓</button>
-            <button class="btn-ghost" @click="editingBuilding = b">Edit</button>
-            <button class="btn-ghost hover:!text-rose-700" @click="deleting = b">Delete</button>
-          </template>
+          <button class="btn-ghost !px-2.5" :disabled="index === 0" title="Move up" aria-label="Move up" @click="move(b, 'up')">↑</button>
+          <button class="btn-ghost !px-2.5" :disabled="index === project.buildings.length - 1" title="Move down" aria-label="Move down" @click="move(b, 'down')">↓</button>
+          <button class="btn-ghost" @click="editingBuilding = b">Edit</button>
+          <button class="btn-ghost hover:!text-rose-700" @click="deleting = b">Delete</button>
         </div>
       </div>
     </div>
 
-    <ProjectFormModal v-if="can.manageProject" :show="editingProject" :project="project" :timezones="timezones"
+    <ProjectFormModal :show="editingProject" :project="project" :timezones="timezones"
                       @close="editingProject = false" />
-    <BuildingFormModal v-if="can.manageBuildings" :show="editingBuilding !== undefined" :project="project"
+    <BuildingFormModal :show="editingBuilding !== undefined" :project="project"
                        :building="editingBuilding" :copy-sources="copySources" @close="editingBuilding = undefined" />
     <ConfirmDialog :show="!!deleting" title="Delete building" :processing="deleteProcessing"
                    :message="deleting ? `Delete [${deleting.name}]? Its timeline leaves the app; its ${deleting.activitiesCount} activities and their history are kept.` : ''"

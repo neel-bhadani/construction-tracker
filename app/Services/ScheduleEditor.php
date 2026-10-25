@@ -20,12 +20,12 @@ use Illuminate\Support\Facades\DB;
  */
 class ScheduleEditor
 {
-    /** Fields an admin edits; changing any of the first three moves planned dates. */
+    /** The plan's fields; changing any of the first three moves planned dates. */
     public const PLAN_FIELDS = ['predecessor_id', 'offset_days', 'date_adjustment_days', 'adjustment_reason', 'description', 'is_break', 'notes'];
 
     private const CHAIN_FIELDS = ['predecessor_id', 'offset_days', 'date_adjustment_days'];
 
-    /** Fields an editor records; neither moves a planned date. */
+    /** What happened on site; neither moves a planned date. */
     private const ACTUAL_FIELDS = ['actual_date', 'notes'];
 
     public function __construct(private readonly ScheduleRecalculator $recalculator) {}
