@@ -29,7 +29,7 @@ class OwnershipTest extends TestCase
     use RefreshDatabase;
 
     /** Routes about the signed-in account itself, never about someone else's records. */
-    private const ACCOUNT_ROUTES = ['main', 'logout', 'profile.edit', 'profile.update', 'profile.password', 'projects.index', 'projects.store', 'imports.store'];
+    private const ACCOUNT_ROUTES = ['main', 'logout', 'profile.edit', 'profile.update', 'profile.password', 'help', 'projects.index', 'projects.store', 'imports.store'];
 
     /** Route name => what the request does, against the owner's records. */
     private const OWNED_ROUTES = [

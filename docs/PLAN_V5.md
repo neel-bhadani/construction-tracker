@@ -116,7 +116,7 @@ moves from X to Y" with the first 5 changed activities, or "No other dates chang
 A hand-made building with 3 floors plus common work, with every number worked out by hand, and the floor
 delete.
 
-## Phase 4: Excel → JSON → DB (same approach as ~/lead-crm1, which is read only) (DONE, real import not yet run)
+## Phase 4: Excel → JSON → DB (same approach as ~/lead-crm1, which is read only) (DONE)
 
 ### Step 1: `php artisan timeline:excel-to-json {--dir=} {--out=}`
 
@@ -148,7 +148,7 @@ delete.
 - The UI upload goes through the same validator, so it can carry floors too.
 - Tests use a small hand-made fixture in tests/Fixtures.
 
-## Docs (last)
+## Docs (last) (DONE)
 
 - README: the import commands, `CLIENT_WORKBOOKS_DIR`, `REGISTRATION_OPEN`, `PROJECT_OWNER_EMAIL`.
 - A new Help page: the activity dialog, insert between, floors, the profile, and one line on why floor %

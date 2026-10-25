@@ -6,7 +6,7 @@ import { Head, Link, router, usePage } from '@inertiajs/vue3'
  | The CRM's shell, as a top bar rather than a sidebar. Same slate-900 ground,
  | brand mark and user block, so it reads as the same family of software. The
  | project switcher jumps between projects from any page; the user block opens
- | a small menu with "My profile" and "Sign out".
+ | a small menu with "My profile", "Help" and "Sign out".
  */
 const props = defineProps({
   title: String,
@@ -74,6 +74,7 @@ const switchProject = event => {
                class="absolute right-0 mt-2 w-48 overflow-hidden rounded-lg bg-white py-1 text-sm text-slate-700 shadow-lg ring-1 ring-slate-900/10">
             <div class="truncate border-b border-slate-100 px-4 py-2 text-xs text-slate-500 md:hidden">{{ user.name }}</div>
             <Link href="/profile" role="menuitem" class="block px-4 py-2 hover:bg-slate-50" @click="menuOpen = false">My profile</Link>
+            <Link href="/help" role="menuitem" class="block px-4 py-2 hover:bg-slate-50" @click="menuOpen = false">Help</Link>
             <Link href="/logout" method="post" as="button" role="menuitem" class="block w-full px-4 py-2 text-left hover:bg-slate-50">
               Sign out
             </Link>
