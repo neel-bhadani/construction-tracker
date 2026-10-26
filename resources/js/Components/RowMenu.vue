@@ -34,7 +34,7 @@ const toggle = async () => {
   if (open.value) return close()
 
   const rect = button.value.getBoundingClientRect()
-  const below = window.innerHeight - rect.bottom > 160
+  const below = window.innerHeight - rect.bottom > props.items.length * 44 + 8
   position.value = {
     right: `${Math.max(8, window.innerWidth - rect.right)}px`,
     ...(below ? { top: `${rect.bottom + 4}px` } : { bottom: `${window.innerHeight - rect.top + 4}px` }),
@@ -60,7 +60,7 @@ onBeforeUnmount(close)
     <div v-if="open" ref="menu" role="menu" :style="position"
          class="fixed z-50 min-w-48 overflow-hidden rounded-lg bg-white py-1 text-left text-sm text-slate-700 shadow-lg ring-1 ring-slate-900/10">
       <button v-for="item in items" :key="item.label" type="button" role="menuitem"
-              class="block w-full px-4 py-2 text-left hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
+              class="block min-h-[var(--control-h)] w-full px-4 py-2 text-left hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
               :class="item.danger ? 'text-rose-700' : ''" @click="pick(item)">{{ item.label }}</button>
     </div>
   </Teleport>

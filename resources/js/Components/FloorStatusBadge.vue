@@ -10,6 +10,6 @@ const styles = {
 </script>
 
 <template>
-  <span class="inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold"
+  <span class="inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-sm font-semibold"
         :class="styles[status]">{{ status }}</span>
 </template>

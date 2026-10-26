@@ -68,11 +68,12 @@ describe('FloorsSection', () => {
     expect(whole.find('button[aria-label^="More for"]').exists()).toBe(false)
   })
 
-  it('is only a small "+ Add floors" link for a building without floors', () => {
+  it('leaves adding floors to the page filters, including when there are no floors', () => {
     const w = mountSection({ floors: [] })
     expect(w.find('section').exists()).toBe(false)
     expect(w.findAll('[data-test="floor-row"]')).toHaveLength(0)
-    expect(w.text()).toBe('+ Add floors')
+    expect(w.text()).toBe('')
+    expect(mountSection().text()).not.toContain('+ Add floors')
   })
 })
 

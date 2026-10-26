@@ -45,7 +45,7 @@ const switchProject = event => {
     <Head :title="title" />
 
     <header class="sticky top-0 z-30 bg-slate-900 text-white">
-      <div class="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4 sm:px-6">
+      <div class="mx-auto flex h-14 max-w-[1400px] items-center gap-3 px-4 sm:px-6">
         <Link href="/projects" class="flex shrink-0 items-center gap-2.5 font-bold">
           <img src="/images/brand/shaligram-mark.png" alt="" class="h-7 w-7 shrink-0" />
           <span class="hidden sm:inline">Shaligram Timeline</span>
@@ -83,9 +83,9 @@ const switchProject = event => {
       </div>
     </header>
 
-    <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+    <main class="mx-auto max-w-[1400px] px-4 py-6 sm:px-6">
       <slot name="breadcrumb" />
-      <h1 v-if="title" class="mb-5 text-xl font-semibold tracking-tight text-slate-900">{{ title }}</h1>
+      <h1 v-if="title" class="mb-5 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">{{ title }}</h1>
       <slot />
     </main>
   </div>

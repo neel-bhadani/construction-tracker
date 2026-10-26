@@ -34,7 +34,7 @@ const chips = computed(() => {
 <template>
   <div class="mb-3 flex flex-wrap gap-1.5" role="group" aria-label="Show activities on">
     <button v-for="chip in chips" :key="chip.key" type="button" data-test="floor-chip"
-            class="rounded-full border px-3 py-1 text-sm font-medium transition-colors"
+            class="min-h-9 rounded-full border px-3 py-1 text-sm font-medium transition-colors max-md:min-h-11"
             :class="modelValue === chip.key ? 'border-teal-700 bg-teal-700 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'"
             :aria-pressed="modelValue === chip.key" @click="emit('update:modelValue', chip.key)">
       {{ chip.label }} <span class="ml-0.5 tabular-nums" :class="modelValue === chip.key ? 'text-teal-100' : 'text-slate-400'">{{ chip.count }}</span>

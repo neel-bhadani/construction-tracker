@@ -60,7 +60,7 @@ watch([range, visible], draw, { deep: true })
 <template>
   <section class="card mb-6 p-4 sm:p-5" aria-labelledby="progress-chart-title">
     <div class="mb-3 flex flex-wrap items-center gap-3">
-      <h2 id="progress-chart-title" class="text-base font-semibold text-slate-900">Planned vs actual progress</h2>
+      <h2 id="progress-chart-title" class="text-xl font-semibold text-slate-900">Planned vs actual progress</h2>
 
       <div v-if="chart.hasActivities" class="ml-auto flex rounded-lg border border-slate-200 p-0.5 text-sm" role="group" aria-label="Time range">
         <button v-for="r in [{ key: 'full', label: 'Full timeline' }, { key: 'firstYear', label: 'First 12 months' }]" :key="r.key"
@@ -76,7 +76,7 @@ watch([range, visible], draw, { deep: true })
 
     <template v-else>
       <!-- the legend is ours, not ECharts': it wraps on a phone and each line has a real tickbox -->
-      <div class="mb-2 flex flex-wrap gap-x-4 gap-y-1.5 text-sm text-slate-700">
+      <div class="mb-2 flex flex-wrap gap-x-4 gap-y-1.5 text-[13px] text-slate-700">
         <label v-for="s in legend" :key="s.key" class="flex cursor-pointer items-center gap-2" :data-series="s.key">
           <input v-model="visible[s.key]" type="checkbox" class="!min-h-0 !w-auto rounded" />
           <svg width="22" height="8" aria-hidden="true">

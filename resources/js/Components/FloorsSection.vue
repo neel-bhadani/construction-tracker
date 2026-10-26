@@ -12,9 +12,6 @@ import { deleteFloorMessage, floorKey } from '@/lib/floors'
  | The building's floors, above the activity list: one row per floor, lowest
  | first, then "Whole building". Every figure is ProgressService output.
  | Clicking a row filters the list to it; clicking it again shows everything.
- |
- | A building without floors shows only a small "+ Add floors" link, so its
- | page looks as it did before floors existed.
  */
 const props = defineProps({
   floors: Array,          // FloorProgress rows, "Whole building" last; empty without floors
@@ -26,7 +23,6 @@ const emit = defineEmits(['select'])
 
 const realFloors = computed(() => props.floors.filter(f => f.id !== null))
 
-const adding = ref(false)
 const renaming = ref(null)
 const deleting = ref(null)
 const deleteProcessing = ref(false)
@@ -60,19 +56,16 @@ const finish = floor => floor.actualFinish
 
 <template>
   <section v-if="floors.length" class="mb-6" aria-labelledby="floors-heading">
-    <div class="mb-2 flex items-center gap-3">
-      <h2 id="floors-heading" class="text-base font-semibold text-slate-900">Floors</h2>
-      <button type="button" class="ml-auto text-sm font-semibold text-teal-700 hover:underline" @click="adding = true">+ Add floors</button>
-    </div>
+    <h2 id="floors-heading" class="mb-3 text-xl font-semibold text-slate-900">Floors</h2>
 
     <div class="card overflow-hidden">
       <!-- column heads, wide screens only; below 1024 px each floor is a card -->
-      <div class="hidden grid-cols-[minmax(0,1fr)_10rem_6.5rem_7.5rem_9.5rem_6.5rem_2.5rem] gap-3 border-b border-slate-200 px-4 py-2.5 text-xs font-semibold text-slate-500 lg:grid">
+      <div class="hidden grid-cols-[minmax(0,1fr)_9rem_6rem_7rem_10rem_6rem_2.5rem] gap-3 border-b border-slate-200 px-4 py-3 text-sm font-semibold text-slate-500 lg:grid">
         <span>Floor</span><span>Progress</span><span>Done</span><span>Planned finish</span><span>Actual / forecast</span><span>Status</span><span />
       </div>
 
       <div v-for="floor in floors" :key="floor.id ?? 'whole'" data-test="floor-row"
-           class="cursor-pointer border-b border-slate-100 px-4 py-3 last:border-0 hover:bg-slate-50 lg:grid lg:grid-cols-[minmax(0,1fr)_10rem_6.5rem_7.5rem_9.5rem_6.5rem_2.5rem] lg:items-center lg:gap-3 lg:py-2.5"
+           class="cursor-pointer border-b border-slate-100 px-4 py-3 text-sm last:border-0 hover:bg-slate-50 lg:grid lg:grid-cols-[minmax(0,1fr)_9rem_6rem_7rem_10rem_6rem_2.5rem] lg:items-center lg:gap-3 lg:py-2.5"
            :class="active === floorKey(floor) ? 'bg-teal-50 ring-1 ring-inset ring-teal-300 hover:!bg-teal-50' : ''"
            @click="select(floor)">
         <!-- name; on cards the status and menu sit beside it -->
@@ -94,12 +87,12 @@ const finish = floor => floor.actualFinish
             <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
               <div class="h-full rounded-full bg-teal-700" :style="{ width: `${Math.min(100, floor.progress * 100)}%` }" />
             </div>
-            <span class="w-12 text-right text-xs tabular-nums text-slate-600">{{ percent(floor.progress) }}</span>
+            <span class="w-14 text-right text-sm tabular-nums text-slate-600">{{ percent(floor.progress) }}</span>
           </div>
         </div>
 
         <!-- cards: the three figures in a row under the bar -->
-        <dl class="mt-2 grid grid-cols-3 gap-2 text-xs lg:contents lg:text-sm">
+        <dl class="mt-2 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3 lg:contents">
           <div class="lg:block">
             <dt class="text-slate-500 lg:sr-only">Done</dt>
             <dd class="text-slate-700">{{ floor.doneCount }} of {{ floor.activitiesCount }} done</dd>
@@ -126,12 +119,8 @@ const finish = floor => floor.actualFinish
     </div>
   </section>
 
-  <div v-else class="mb-3 flex justify-end">
-    <button type="button" class="text-sm font-semibold text-teal-700 hover:underline" @click="adding = true">+ Add floors</button>
-  </div>
-
-  <FloorFormModal :show="adding || !!renaming" :project-id="projectId" :building-id="buildingId"
-                  :floor="renaming" :existing="realFloors" @close="adding = false; renaming = null" />
+  <FloorFormModal :show="!!renaming" :project-id="projectId" :building-id="buildingId"
+                  :floor="renaming" :existing="realFloors" @close="renaming = null" />
   <ConfirmDialog :show="!!deleting" title="Delete floor" :processing="deleteProcessing"
                  :message="deleting ? deleteFloorMessage(deleting) : ''"
                  @close="deleting = null" @confirm="confirmDelete" />
