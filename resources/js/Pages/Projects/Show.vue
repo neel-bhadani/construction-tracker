@@ -72,9 +72,9 @@ const confirmDelete = () => {
         <button class="btn" @click="editingBuilding = null">+ Add building</button>
       </div>
     </div>
-    <p v-if="project.details" class="-mt-2 mb-5 max-w-3xl whitespace-pre-line text-sm text-slate-500">{{ project.details }}</p>
+    <p v-if="project.details" class="-mt-2 mb-5 whitespace-pre-line text-sm text-slate-500">{{ project.details }}</p>
 
-    <p v-if="!project.buildings.length" class="card max-w-lg p-7 text-sm text-slate-500">
+    <p v-if="!project.buildings.length" class="card p-7 text-sm text-slate-500">
       This project has no buildings yet.
       Add one with “+ Add building”: start it empty, copy another building's plan, or import it from Excel.
     </p>

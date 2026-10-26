@@ -27,7 +27,7 @@ const sections = [
         </ul>
       </nav>
 
-      <div class="help max-w-3xl space-y-5 text-sm leading-relaxed text-slate-700">
+      <div class="help space-y-5 text-sm leading-relaxed text-slate-700">
         <section id="add" class="card p-5 sm:p-6">
           <h2>Add an activity</h2>
           <p>Open a building and press <b>Add activity</b>. Give it a name, choose what it <b>comes after</b>, and type its
@@ -42,7 +42,8 @@ const sections = [
             thing counted from the activity it comes after. Type either one and the other follows. If you move an
             activity's date, everything that comes after it moves too.</p>
           <p>The <b>actual date</b> is when it really was done. Leave it empty until then. It can't be in the future or
-            before the building's actual start. The <b>Actual</b> button on each row is the quick way to record it.</p>
+            before the building's actual start. Choose <b>Mark done</b> or <b>Change actual date</b> in the row's <b>⋯</b> menu.
+            The <b>NEXT</b> row also has a visible <b>Mark done</b> button.</p>
           <p><b>Ahead / behind</b> is planned minus actual: +3 means it finished 3 days early, −2 means 2 days late.</p>
           <p class="example"><b>Example:</b> “3rd SLAB” is planned for 15 Feb and was finished on 12 Feb: it shows +3.</p>
           <p>Some activities carry a fixed shift copied from the old Excel sheet. The dialog then says, for example,
@@ -54,7 +55,7 @@ const sections = [
         <section id="insert" class="card p-5 sm:p-6">
           <h2>Insert an activity between two others</h2>
           <p>Open the <b>⋯</b> menu on a row and choose <b>Insert activity below</b> (on a computer, a small <b>+</b> also
-            shows under a row when you point at it). The new activity goes right under that row. Then choose:</p>
+            shows when you point at the gap between rows). The new activity goes right under that row. Then choose:</p>
           <ul>
             <li><b>Push the activities after it later</b> (the usual choice): the next activity now comes after the new one,
               so it and everything after it move later by the new activity's days.</li>

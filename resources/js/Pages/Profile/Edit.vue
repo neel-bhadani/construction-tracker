@@ -33,7 +33,7 @@ const savePassword = () => password.put('/profile/password', {
 
 <template>
   <AppLayout title="My profile">
-    <div class="grid max-w-4xl gap-5 md:grid-cols-2">
+    <div class="grid gap-5 md:grid-cols-2">
       <section class="card p-5 sm:p-6" aria-labelledby="details-heading">
         <h2 id="details-heading" class="mb-4 text-base font-semibold text-slate-900">Details</h2>
         <form class="space-y-4" @submit.prevent="saveDetails">

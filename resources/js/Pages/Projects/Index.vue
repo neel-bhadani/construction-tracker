@@ -45,7 +45,7 @@ const confirmDelete = () => {
       <button class="btn" @click="editing = null">+ New project</button>
     </div>
 
-    <p v-if="!projects.length" class="card max-w-lg p-7 text-sm text-slate-500">
+    <p v-if="!projects.length" class="card p-7 text-sm text-slate-500">
       <span class="block text-lg font-semibold text-slate-900">No projects yet.</span>
       Create one with “+ New project”, then add its buildings.
     </p>

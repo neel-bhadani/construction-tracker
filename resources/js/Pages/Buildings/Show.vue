@@ -206,16 +206,23 @@ const menuItems = row => [
 
     <!-- desktop: the table -->
     <div class="card hidden lg:block">
-      <table class="w-full text-sm" aria-label="Activities">
+      <table class="w-full table-fixed text-sm" aria-label="Activities">
+        <colgroup>
+          <col />
+          <col span="2" class="w-28" />
+          <col class="w-32" />
+          <col span="2" class="w-28" />
+          <col class="w-14" />
+        </colgroup>
         <thead class="sticky top-14 z-20 border-b border-slate-200 bg-slate-50 text-left text-sm font-semibold text-slate-600">
           <tr>
-            <th class="px-4 py-3">Activity</th>
+            <th class="min-w-[280px] px-4 py-3">Activity</th>
             <th class="px-3 py-3">Planned</th>
             <th class="px-3 py-3">Actual</th>
             <th class="px-3 py-3 text-right">Ahead / behind</th>
             <th class="px-3 py-3">Status</th>
             <th class="px-3 py-3">Forecast</th>
-            <th class="px-4 py-3"><span class="sr-only">Actions</span></th>
+            <th class="px-2 py-3"><span class="sr-only">Actions</span></th>
           </tr>
         </thead>
         <tbody>
@@ -223,10 +230,15 @@ const menuItems = row => [
             <tr data-test="activity-row" class="border-b border-slate-200 last:border-0"
                 :class="row.is_break ? 'bg-slate-50 italic text-slate-500' : row.status === 'NEXT' ? 'bg-amber-50' : row.status === 'Done' ? 'bg-emerald-50/60' : ''">
               <td class="px-4 py-2.5">
-                <button type="button" class="text-left font-medium hover:text-teal-700 hover:underline"
-                        :class="row.is_break ? '' : 'text-slate-900'" @click="editing = row">{{ row.description }}</button>
-                <span v-if="hasFloors && !row.is_break" data-test="floor-tag" class="ml-2 whitespace-nowrap rounded px-1.5 py-0.5 text-sm font-medium"
-                      :class="row.floor_id ? 'bg-sky-50 text-sky-800' : 'text-slate-400'">{{ floorTag(row) }}</span>
+                <div class="flex items-center justify-between gap-3">
+                  <div class="min-w-0">
+                    <button type="button" class="break-words text-left font-medium hover:text-teal-700 hover:underline"
+                            :class="row.is_break ? '' : 'text-slate-900'" @click="editing = row">{{ row.description }}</button>
+                    <span v-if="hasFloors && !row.is_break" data-test="floor-tag" class="ml-2 whitespace-nowrap rounded px-1.5 py-0.5 text-sm font-medium"
+                          :class="row.floor_id ? 'bg-sky-50 text-sky-800' : 'text-slate-400'">{{ floorTag(row) }}</span>
+                  </div>
+                  <button v-if="row.status === 'NEXT' && !row.is_break" class="btn shrink-0 !px-3" @click="recording = row">Mark done</button>
+                </div>
               </td>
               <td class="whitespace-nowrap px-3 py-2.5">
                 {{ formatDate(row.plannedDate) }}
@@ -240,11 +252,8 @@ const menuItems = row => [
               </td>
               <td class="px-3 py-2.5"><StatusChip :status="row.is_break ? 'Break' : row.status" /></td>
               <td class="whitespace-nowrap px-3 py-2.5">{{ row.actualDate ? '' : formatDate(row.actualOrForecast) }}</td>
-              <td class="whitespace-nowrap px-3 py-1 text-right">
-                <div class="flex justify-end gap-1.5">
-                  <button v-if="row.status === 'NEXT' && !row.is_break" class="btn !px-3" @click="recording = row">Mark done</button>
-                  <RowMenu :items="menuItems(row)" :label="`More for ${row.description}`" button-class="btn-ghost !px-2.5 !py-1 !text-lg not-italic" />
-                </div>
+              <td class="whitespace-nowrap px-2 py-1 text-right">
+                <RowMenu :items="menuItems(row)" :label="`More for ${row.description}`" button-class="btn-ghost !px-2.5 !py-1 !text-lg not-italic" />
               </td>
             </tr>
             <tr v-if="index < shownRows.length - 1">

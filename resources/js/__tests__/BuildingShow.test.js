@@ -103,6 +103,8 @@ describe('building page readability and activity actions', () => {
         expect(button(row, 'Edit')).toBeUndefined()
       }
     }
+    expect(button(rows(w)[2].find('td'), 'Mark done')).toBeDefined()
+    expect(rows(w)[2].findAll('td').at(-1).findAll('button').map(b => b.text())).toEqual(['⋯'])
     await menu(rows(w)[0])
     expect(items(w).map(b => b.text())).toEqual(['Change actual date', 'Edit', 'Insert activity below', 'Move to floor…', 'Delete'])
     await items(w)[0].trigger('click')
@@ -143,9 +145,15 @@ describe('building page readability and activity actions', () => {
     expect(w.findAllComponents({ name: 'ConfirmDialog' }).find(c => c.props('title') === 'Delete activity').props('show')).toBe(true)
   })
 
-  it('hides Add floors for common work and Move to floor when no floors exist', async () => {
-    const w = render({ floors: [], building: { id: 2, name: 'Overall Timeline', type: 'common_work' } })
+  it.each([{ floorRows: [] }, { floorRows: floors() }])('hides Add floors for common work regardless of its floors', ({ floorRows }) => {
+    const w = render({ floors: floorRows, building: { id: 2, name: 'Overall Timeline', type: 'common_work' } })
     expect(button(w, '+ Add floors')).toBeUndefined()
+    expect(w.find('section[aria-label="Status"]').findAll('.card')).toHaveLength(4)
+    expect(filters(w)).toHaveLength(3)
+  })
+
+  it('hides Move to floor when no floors exist and can add floors to a tower', async () => {
+    const w = render({ floors: [] })
     await menu(rows(w)[0])
     expect(items(w).map(b => b.text())).not.toContain('Move to floor…')
 
