@@ -27,6 +27,8 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
     Route::get('projects', [ProjectController::class, 'index'])->name('projects.index');
     Route::post('projects', [ProjectController::class, 'store'])->name('projects.store');
     Route::get('projects/{project}', [ProjectController::class, 'show'])->name('projects.show');
+    // the project's own timeline of site-wide work, a tab of the project page
+    Route::get('projects/{project}/common', [ProjectController::class, 'common'])->name('projects.common');
     Route::patch('projects/{project}', [ProjectController::class, 'update'])->name('projects.update');
     Route::delete('projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy');
 

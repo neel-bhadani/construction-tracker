@@ -33,6 +33,7 @@ class OwnershipTest extends TestCase
     /** Route name => what the request does, against the owner's records. */
     private const OWNED_ROUTES = [
         'projects.show' => 'view a project',
+        'projects.common' => 'view the project\'s common activities',
         'projects.update' => 'edit a project',
         'projects.destroy' => 'delete a project',
         'buildings.store' => 'add a building',
@@ -76,8 +77,9 @@ class OwnershipTest extends TestCase
         $this->empty = Project::create(['owner_id' => $this->owner()->id, 'name' => 'Empty project', 'planned_start_date' => '2026-04-05']);
         $this->building = Building::create(['project_id' => $this->project->id, 'name' => 'Tower A', 'sort_order' => 1]);
         $this->spare = Building::create(['project_id' => $this->project->id, 'name' => 'Tower B', 'sort_order' => 2]);
-        $this->root = DB::table('activities')->insertGetId(['building_id' => $this->building->id, 'description' => 'Root', 'offset_days' => 10, 'planned_date' => '2026-04-05', 'sort_order' => 1]);
-        $this->leaf = DB::table('activities')->insertGetId(['building_id' => $this->building->id, 'description' => 'Leaf', 'predecessor_id' => $this->root, 'offset_days' => 5, 'planned_date' => '2026-04-05', 'sort_order' => 2]);
+        Building::create(['project_id' => $this->project->id, 'name' => 'Common activities', 'type' => 'common_work', 'sort_order' => 0]);
+        $this->root = DB::table('activities')->insertGetId([...$this->workId(), 'building_id' => $this->building->id, 'description' => 'Root', 'offset_days' => 10, 'planned_date' => '2026-04-05', 'sort_order' => 1]);
+        $this->leaf = DB::table('activities')->insertGetId([...$this->workId(), 'building_id' => $this->building->id, 'description' => 'Leaf', 'predecessor_id' => $this->root, 'offset_days' => 5, 'planned_date' => '2026-04-05', 'sort_order' => 2]);
         app(ScheduleRecalculator::class)->recalculate($this->building);
 
         // the other account has data of its own, with the same names
@@ -187,6 +189,7 @@ class OwnershipTest extends TestCase
         $b = $this->building->id;
         [$method, $url, $body] = match ($route) {
             'projects.show' => ['get', "/projects/{$p}", []],
+            'projects.common' => ['get', "/projects/{$p}/common", []],
             'projects.update' => ['patch', "/projects/{$p}", ['name' => 'Renamed', 'planned_start_date' => '2026-04-05', 'timezone' => 'Asia/Kolkata']],
             'projects.destroy' => ['delete', "/projects/{$this->empty->id}", []],
             'buildings.store' => ['post', "/projects/{$p}/buildings", ['name' => 'Tower C', 'type' => 'building', 'plan' => 'empty']],

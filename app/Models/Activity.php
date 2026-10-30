@@ -15,6 +15,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * activities through the service that writes a placeholder and recalculates in the same
  * transaction, never with a bare Activity::create().
  *
+ * work_number and work_id ("SV-012") are given once, on create, by WorkIds, and never change.
+ *
  * predecessor_id is ON DELETE RESTRICT: an activity with dependants cannot be deleted, and
  * hard-deleting its building fails while the chain is intact. See Building.
  */
@@ -52,6 +54,7 @@ class Activity extends Model
     protected function casts(): array
     {
         return [
+            'work_number' => 'integer',
             'offset_days' => 'integer',
             'date_adjustment_days' => 'integer',
             'is_break' => 'boolean',

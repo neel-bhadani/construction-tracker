@@ -98,8 +98,13 @@ php artisan timeline:import-json database/data/shaligram-vrundavan.json --owner=
 php artisan optimize
 ```
 
-Read the dry run before the real one: three buildings, "Planned dates equal to the file (Excel): 151 of 151" and
-every figure equal to `expected`.
+**Migrate before you import.** `php artisan migrate --force` always comes first: the import writes Work IDs and fills
+the project's Common activities, which only exist once the migrations have run. On a database that already has the
+project, the Work ID migration renames its Overall Timeline to Common activities (same id, same data) and numbers
+every activity (SV-001…), common activities first.
+
+Read the dry run before the real one: Tower A, Tower B and the Common activities, "Planned dates equal to the file
+(Excel): 151 of 151" and every figure equal to `expected` (27 of 27).
 
 Running the import again is safe. The same file twice is refused (`plan_imports` holds its sha256 per owner), and so
 is a changed file while the owner has a project of that name; a failed run is one rolled-back transaction and

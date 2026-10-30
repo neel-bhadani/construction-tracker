@@ -10,13 +10,16 @@ use RuntimeException;
 
 /**
  * Writes a whole plan into a building in one go: the workbook import, a copied plan, an Excel
- * upload. Rows are inserted with a placeholder planned_date, wired to their predecessors, and
+ * upload. Work IDs are given in the order of $rows. Rows are inserted with a placeholder planned_date, wired to their predecessors, and
  * recalculated — all inside the caller's transaction. Planned dates are never copied; they are
  * always computed from this building's own start.
  */
 class PlanWriter
 {
-    public function __construct(private readonly ScheduleRecalculator $recalculator) {}
+    public function __construct(
+        private readonly ScheduleRecalculator $recalculator,
+        private readonly WorkIds $workIds,
+    ) {}
 
     /**
      * @param  array<int|string, array{description: string, predecessor: int|string|null, offset_days: int, date_adjustment_days: int, adjustment_reason: ?string, is_break: bool, sort_order: int, actual_date?: ?string, notes?: ?string}>  $rows  keyed by any id the predecessor keys refer to
@@ -27,10 +30,14 @@ class PlanWriter
     {
         return DB::transaction(function () use ($building, $rows, $user, $origin) {
             $ids = [];
+            $workIds = $rows === [] ? [] : $this->workIds->take($building->project_id, count($rows));
+            $number = array_key_first($workIds);
 
             foreach ($rows as $key => $row) {
                 $ids[$key] = DB::table('activities')->insertGetId([
                     'building_id' => $building->id,
+                    'work_number' => $number,
+                    'work_id' => $workIds[$number++],
                     'description' => $row['description'],
                     'offset_days' => $row['offset_days'],
                     'date_adjustment_days' => $row['date_adjustment_days'],

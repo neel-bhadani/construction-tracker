@@ -6,6 +6,7 @@ use App\Data\BuildingProgress;
 use App\Data\BuildingSummary;
 use App\Data\ProjectSummary;
 use App\Enums\ActivityStatus;
+use App\Enums\BuildingType;
 use App\Models\Building;
 use App\Models\Project;
 use DateTimeInterface;
@@ -29,20 +30,23 @@ class ProjectSummaryService
             })
             ->all();
 
+        $common = collect($buildings)->firstWhere('type', BuildingType::CommonWork->value);
         $behind = collect($buildings)->whereNotNull('currentLead')->sortBy('currentLead')->first();
         $handovers = array_filter(array_column($buildings, 'expectedHandover'));
 
         return new ProjectSummary(
             id: $project->id,
             name: $project->name,
+            code: $project->code,
             details: $project->details,
             plannedStartDate: $project->planned_start_date->toDateString(),
             timezone: $project->timezone,
-            buildingsCount: count($buildings),
+            buildingsCount: count($buildings) - ($common === null ? 0 : 1),
             progress: $this->progress->project($progress),
             mostBehind: $behind === null ? null : ['id' => $behind->id, 'name' => $behind->name, 'lead' => $behind->currentLead],
             expectedHandover: $handovers === [] ? null : max($handovers),
-            buildings: $buildings,
+            buildings: collect($buildings)->where('type', BuildingType::Building->value)->values()->all(),
+            common: $common,
         );
     }
 

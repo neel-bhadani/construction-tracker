@@ -21,7 +21,7 @@ class ActivityRevisionTest extends TestCase
     {
         $project = Project::create(['owner_id' => $this->owner()->id, 'name' => 'Test project', 'planned_start_date' => '2026-04-05']);
         $scope = Building::create(['project_id' => $project->id, 'name' => 'Tower A']);
-        $activityId = DB::table('activities')->insertGetId(['building_id' => $scope->id, 'description' => 'A', 'planned_date' => '2026-04-05']);
+        $activityId = DB::table('activities')->insertGetId([...$this->workId(), 'building_id' => $scope->id, 'description' => 'A', 'planned_date' => '2026-04-05']);
         $oldNote = Str::repeat('Shuttering delayed by rain. ', 40);
         $newNote = Str::repeat('Concrete poured on site. ', 50);
 

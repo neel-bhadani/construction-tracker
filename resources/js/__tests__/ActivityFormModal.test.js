@@ -144,3 +144,12 @@ describe('ActivityFormModal', () => {
   })
 })
 
+
+describe('the title', () => {
+  it('names the activity by its Work ID', async () => {
+    const withIds = rows.map(r => ({ ...r, work_id: `TP-00${r.id}` }))
+    expect((await open({ rows: withIds, activity: withIds[1] })).find('h3').text()).toBe('Edit TP-002 B')
+    expect((await open({ rows: withIds, insertAfter: withIds[2] })).find('h3').text()).toBe('Insert below TP-003 C')
+    expect((await open({})).find('h3').text()).toBe('Add activity')
+  })
+})

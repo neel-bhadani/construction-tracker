@@ -133,7 +133,7 @@ class BuildingsTest extends TestCase
         $upload = $this->upload('SV_Overall3.xlsx');
 
         $this->actingAs($this->owner())->post("/projects/{$this->heights->id}/buildings", [
-            'name' => 'Site works', 'type' => 'common_work', 'plan' => 'import', 'import_token' => $upload['token'], 'sheet' => 'Overall Timeline',
+            'name' => 'Site works', 'plan' => 'import', 'import_token' => $upload['token'], 'sheet' => 'Overall Timeline',
         ])->assertSessionHasNoErrors();
 
         $building = Building::where('name', 'Site works')->sole();
@@ -188,7 +188,7 @@ class BuildingsTest extends TestCase
             ->assertSessionHasNoErrors();
     }
 
-    public function test_editing_a_building_changes_name_and_type_only_and_is_audited(): void
+    public function test_editing_a_building_changes_its_name_only_and_is_audited(): void
     {
         $towerA = Building::where('name', 'Tower A')->sole();
 
@@ -197,24 +197,50 @@ class BuildingsTest extends TestCase
         ])->assertSessionHasNoErrors();
 
         $towerA->refresh();
-        $this->assertSame(['Tower A (North)', 'common_work', '2026-04-05'], [$towerA->name, $towerA->type->value, $towerA->planned_start_date->toDateString()]);
+        $this->assertSame(['Tower A (North)', 'building', '2026-04-05'], [$towerA->name, $towerA->type->value, $towerA->planned_start_date->toDateString()]);
         $this->assertSame([
             ['name', 'Tower A', 'Tower A (North)', null, $this->owner()->id],
-            ['type', 'building', 'common_work', null, $this->owner()->id],
         ], $this->revisions($towerA));
+    }
+
+    public function test_the_common_activities_cannot_be_renamed_moved_or_deleted(): void
+    {
+        $common = $this->sv->commonActivities()->sole();
+        $base = "/projects/{$this->sv->id}/buildings/{$common->id}";
+
+        $this->actingAs($this->owner())->patch($base, ['name' => 'Site works'])->assertForbidden();
+        $this->actingAs($this->owner())->patch("{$base}/move", ['direction' => 'up'])->assertForbidden();
+        $this->actingAs($this->owner())->delete($base)->assertForbidden();
+
+        $common->refresh();
+        $this->assertSame(['Common activities', false], [$common->name, $common->trashed()]);
+        $this->assertSame([], $this->revisions($common));
+    }
+
+    public function test_a_new_building_is_always_a_building(): void
+    {
+        $this->actingAs($this->owner())->post("/projects/{$this->sv->id}/buildings", ['name' => 'Tower C', 'type' => 'common_work', 'plan' => 'empty'])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('building', Building::where('name', 'Tower C')->sole()->type->value);
+        $this->assertSame(1, $this->sv->buildings()->where('type', 'common_work')->count());
+
+        $this->actingAs($this->owner())->post("/projects/{$this->sv->id}/buildings", ['name' => 'Common activities', 'plan' => 'empty'])
+            ->assertSessionHasErrors(['name' => 'This project already has a building with that name.']);
     }
 
     public function test_moving_a_building_swaps_it_with_its_neighbour(): void
     {
-        $overall = Building::where('name', 'Overall Timeline')->sole();
+        $towerB = Building::where('name', 'Tower B')->sole();
+        $buildings = fn () => $this->sv->buildings()->where('type', 'building')->orderBy('sort_order')->pluck('name')->all();
 
-        $this->actingAs($this->owner())->patch("/projects/{$this->sv->id}/buildings/{$overall->id}/move", ['direction' => 'up'])->assertSessionHasNoErrors();
-        $this->assertSame(['Tower A', 'Overall Timeline', 'Tower B'], $this->sv->buildings()->orderBy('sort_order')->pluck('name')->all());
+        $this->actingAs($this->owner())->patch("/projects/{$this->sv->id}/buildings/{$towerB->id}/move", ['direction' => 'up'])->assertSessionHasNoErrors();
+        $this->assertSame(['Tower B', 'Tower A'], $buildings());
 
         // the top one cannot go higher
+        $this->actingAs($this->owner())->patch("/projects/{$this->sv->id}/buildings/{$towerB->id}/move", ['direction' => 'up']);
+        $this->assertSame(['Tower B', 'Tower A'], $buildings());
         $towerA = Building::where('name', 'Tower A')->sole();
-        $this->actingAs($this->owner())->patch("/projects/{$this->sv->id}/buildings/{$towerA->id}/move", ['direction' => 'up']);
-        $this->assertSame(['Tower A', 'Overall Timeline', 'Tower B'], $this->sv->buildings()->orderBy('sort_order')->pluck('name')->all());
 
         $this->assertSame(2, BuildingRevision::where('field', 'sort_order')->count());
         $this->actingAs($this->owner())->patch("/projects/{$this->sv->id}/buildings/{$towerA->id}/move", ['direction' => 'sideways'])->assertSessionHasErrors('direction');
@@ -232,7 +258,7 @@ class BuildingsTest extends TestCase
         $this->assertSoftDeleted($towerB);
         $this->assertSame([52, 3], [Activity::where('building_id', $towerB->id)->count(), $actuals]);
         $this->assertSame([['deleted', 'Tower B', null, null, $this->owner()->id]], $this->revisions($towerB));
-        $this->assertSame(['Tower A', 'Overall Timeline'], $this->sv->buildings()->orderBy('sort_order')->pluck('name')->all());
+        $this->assertSame(['Tower A', 'Common activities'], $this->sv->buildings()->orderBy('sort_order')->pluck('name')->all());
 
         // its name is free again
         $this->actingAs($this->owner())->post("/projects/{$this->sv->id}/buildings", ['name' => 'Tower B', 'type' => 'building', 'plan' => 'empty'])

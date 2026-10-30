@@ -32,7 +32,10 @@ class ScheduleEditor
     /** What the activity dialog saves: the plan and the actual date. */
     private const DIALOG_FIELDS = [...self::PLAN_FIELDS, 'actual_date'];
 
-    public function __construct(private readonly ScheduleRecalculator $recalculator) {}
+    public function __construct(
+        private readonly ScheduleRecalculator $recalculator,
+        private readonly WorkIds $workIds,
+    ) {}
 
     /**
      * Run the recalculator's own computation on the graph as it would be after the change, in
@@ -121,6 +124,8 @@ class ScheduleEditor
             $activity = new Activity($this->normalise($data));
             $activity->building_id = $building->id;
             $activity->sort_order = $rows->max('sort_order') + 1;
+            $workIds = $this->workIds->take($building->project_id);
+            $activity->forceFill(['work_number' => array_key_first($workIds), 'work_id' => reset($workIds)]);
             $activity->forceFill(['planned_day' => 0, 'planned_date' => $building->planned_start_date])->save();
 
             $this->revision($activity, $user, 'created', null, $activity->description);

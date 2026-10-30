@@ -27,6 +27,7 @@ use Tests\TestCase;
  *   recent pace: previous actual 29 Jan, 30 done by then → (40 − 30) / 14 → 30 left take 42 days → 26 Mar
  *
  * Site works (common work): one 30-day activity, done on its planned day, 31 Jan: everything 31 Jan, lead 0.
+ * It fills the project's own Common activities and is written first, so it takes the first Work ID.
  */
 class ImportJsonTest extends TestCase
 {
@@ -73,7 +74,12 @@ class ImportJsonTest extends TestCase
         $diwali = $rows->firstWhere('description', 'DIWALI BREAK 10');
         $this->assertSame([true, 3], [$diwali->is_break, $diwali->date_adjustment_days]);
         $this->assertSame('Poured in two halves', $rows->firstWhere('description', 'GF SLAB')->notes);
-        $this->assertSame('common_work', Building::where('name', 'Site works')->sole()->type->value);
+        // the file's common timeline is the project's own Common activities, numbered first
+        $common = $project->commonActivities()->sole();
+        $this->assertSame(['Common activities', 1, '2026-01-01'], [$common->name, $project->buildings()->count() - 1, $common->planned_start_date->toDateString()]);
+        $this->assertSame(['HMH-001'], Activity::where('building_id', $common->id)->pluck('work_id')->all());
+        $this->assertSame(['HMH-002', 'HMH-009'], [$rows->first()->work_id, $rows->last()->work_id]);
+        $this->assertSame([9, 'HMH'], [$project->fresh()->next_activity_number, $project->code]);
 
         $log = PlanImport::sole();
         $this->assertSame([$this->owner()->id, $project->id, 'Hand-made Heights', 'plan-import.json', hash_file('sha256', $this->file)],

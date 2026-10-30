@@ -19,7 +19,8 @@ use Illuminate\Validation\Validator;
 
 /**
  * Adding a building, with its plan empty, copied from another building in any of the owner's
- * projects, or imported from a workbook this session uploaded. Editing uses the same rules for name and type only.
+ * projects, or imported from a workbook this session uploaded. Editing changes the name only. A new
+ * one is always a building: each project has its own Common activities already.
  */
 class BuildingRequest extends FormRequest
 {
@@ -31,7 +32,7 @@ class BuildingRequest extends FormRequest
     {
         $building = $this->route('building');
 
-        return $building ? Gate::inspect('update', $building) : Gate::inspect('create', [Building::class, $this->project()]);
+        return $building ? Gate::inspect('rename', $building) : Gate::inspect('create', [Building::class, $this->project()]);
     }
 
     /**
@@ -42,7 +43,6 @@ class BuildingRequest extends FormRequest
         $rules = [
             'name' => ['required', 'string', 'max:100',
                 Rule::unique('buildings', 'name')->where('project_id', $this->project()->id)->whereNull('deleted_at')->ignore($this->route('building'))],
-            'type' => ['required', Rule::enum(BuildingType::class)],
         ];
 
         if ($this->route('building')) {
@@ -67,7 +67,6 @@ class BuildingRequest extends FormRequest
     {
         return [
             'name.unique' => 'This project already has a building with that name.',
-            'type.enum' => 'Choose Building or Common work.',
             'copy_from.required_if' => 'Choose the building to copy the plan from.',
             'copy_from.exists' => 'That building no longer exists. Choose another.',
             'import_token.required_if' => 'Choose an Excel file to import.',
@@ -115,7 +114,7 @@ class BuildingRequest extends FormRequest
 
                 // the same checks as `timeline:import-json`: the chain, loops, breaks, every planned date
                 $problems = app(PlanDocumentValidator::class)->building(
-                    PlanDocument::building($this->plan, BuildingType::from($this->input('type')), null),
+                    PlanDocument::building($this->plan, BuildingType::Building, null),
                 );
                 if ($problems !== []) {
                     $this->plan = null;

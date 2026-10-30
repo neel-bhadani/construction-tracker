@@ -214,7 +214,10 @@ const submit = () => {
   else form.post(`/buildings/${props.building.id}/activities`, options)
 }
 
-const title = computed(() => (isEdit.value ? 'Edit activity' : isInsert.value ? `Insert below ${props.insertAfter.description}` : 'Add activity'))
+// the Work ID is given when the activity is saved: a new one has none yet
+const workId = row => (row?.work_id ? `${row.work_id} ` : '')
+const title = computed(() => (isEdit.value ? `Edit ${workId(props.activity)}${props.activity.description}`
+  : isInsert.value ? `Insert below ${workId(props.insertAfter)}${props.insertAfter.description}` : 'Add activity'))
 </script>
 
 <template>

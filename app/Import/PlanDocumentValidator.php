@@ -17,6 +17,7 @@ use Illuminate\Validation\Rule;
  * 1. Shape: Validator rules, as a Form Request would.
  * 2. Each building: rows unique, "comes after" a row of the same building, no row after itself,
  *    breaks without an actual date, no actual date before the start.
+ *    At most one building is the common activities (common_work); it fills the project's own.
  * 3. The chain: the recalculator's own computation, in memory. A loop is reported with its rows;
  *    every planned date it gives must equal the JSON's planned_date, which is Excel's.
  *
@@ -47,8 +48,17 @@ class PlanDocumentValidator
         }
 
         $problems = [];
+        $common = array_filter($document['buildings'], fn (array $building) => $building['type'] === BuildingType::CommonWork->value);
+        if (count($common) > 1) {
+            $problems[] = 'Only one timeline can be the common activities: '.implode(', ', array_column($common, 'name')).'.';
+        }
+
         foreach ($document['buildings'] as $building) {
             array_push($problems, ...$this->building($building));
+
+            if ($building['type'] === BuildingType::Building->value && mb_strtolower($building['name']) === mb_strtolower(BuildingType::CommonWork->label())) {
+                $problems[] = "{$building['name']}: the name is the project's own Common activities; choose another.";
+            }
 
             if (! isset($document['expected'][$building['name']])) {
                 $problems[] = "{$building['name']}: no expected figures in `expected`.";

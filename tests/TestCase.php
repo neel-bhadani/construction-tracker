@@ -19,6 +19,21 @@ abstract class TestCase extends BaseTestCase
         return $this->owner ??= User::factory()->create(['name' => 'The Owner']);
     }
 
+    private int $workNumber = 0;
+
+    /**
+     * A Work ID for an activity a test inserts with raw SQL, which WorkIds does not see: numbered
+     * per test from 1001, clear of the numbers a project's own counter gives.
+     *
+     * @return array{work_number: int, work_id: string}
+     */
+    protected function workId(): array
+    {
+        $number = 1000 + ++$this->workNumber;
+
+        return ['work_number' => $number, 'work_id' => "T-{$number}"];
+    }
+
     /**
      * The client's workbooks are not in the repository. Tests that need them are skipped, not
      * failed, where CLIENT_WORKBOOKS_DIR does not hold all three.

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Data\PlanImportResult;
+use App\Enums\BuildingType;
 use App\Exceptions\PlanImportException;
 use App\Import\PlanDocument;
 use App\Import\PlanDocumentValidator;
@@ -91,10 +92,24 @@ class PlanImporter
         $mismatches = [];
         $datesChecked = $figuresChecked = 0;
 
-        foreach ($document['buildings'] as $data) {
-            $building = $this->projects->createBuilding($project, [
-                'name' => $data['name'], 'type' => $data['type'], 'planned_start_date' => $data['planned_start'],
-            ], $owner, origin: "imported from {$file}");
+        // the buildings keep the file's order; the common timeline is written first, so its
+        // activities take the first Work IDs, as the backfill numbered them
+        $order = 0;
+        foreach ($document['buildings'] as $index => $data) {
+            $document['buildings'][$index]['sort_order'] = $data['type'] === BuildingType::CommonWork->value ? 0 : ++$order;
+        }
+        $timelines = collect($document['buildings'])->sortBy(fn (array $data) => $data['type'] === BuildingType::CommonWork->value ? 0 : 1);
+
+        foreach ($timelines as $data) {
+            if ($data['type'] === BuildingType::CommonWork->value) {
+                // the project's own Common activities, created with it
+                $building = $project->commonActivities()->sole();
+                $building->forceFill(['planned_start_date' => $data['planned_start']])->save();
+            } else {
+                $building = $this->projects->createBuilding($project, [
+                    'name' => $data['name'], 'planned_start_date' => $data['planned_start'],
+                ], $owner, origin: "imported from {$file}");
+            }
             if ($data['actual_start'] !== null) {
                 $building->forceFill(['actual_start_date' => $data['actual_start']])->save();
             }
@@ -122,14 +137,17 @@ class PlanImporter
                 }
             }
 
-            $buildings[] = [
-                'name' => $data['name'],
+            $buildings[$data['sort_order']] = [
+                'name' => $building->name,
                 'type' => $data['type'],
                 'activities' => count($data['activities']),
                 'actuals' => count(array_filter(array_column($data['activities'], 'actual_date'))),
                 'breaks' => count(array_filter(array_column($data['activities'], 'is_break'))),
             ];
         }
+
+        ksort($buildings);
+        $buildings = array_values($buildings);
 
         if ($mismatches !== []) {
             throw new PlanImportException("The imported plan does not match the file. Nothing was written:\n  ".implode("\n  ", $mismatches));

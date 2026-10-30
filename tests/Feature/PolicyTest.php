@@ -26,7 +26,7 @@ class PolicyTest extends TestCase
     private const ABILITIES = [
         'activity.view', 'activity.recordActual', 'activity.create', 'activity.update', 'activity.delete',
         'project.viewAny', 'project.view', 'project.create', 'project.update', 'project.delete',
-        'building.view', 'building.create', 'building.update', 'building.delete', 'building.updateDates',
+        'building.view', 'building.create', 'building.update', 'building.rename', 'building.move', 'building.delete', 'building.updateDates',
     ];
 
     /** Not about one project: any account may list its own and make a new one. */
@@ -105,7 +105,7 @@ class PolicyTest extends TestCase
     private function activity(): Activity
     {
         return Activity::findOrFail(DB::table('activities')->insertGetId([
-            'building_id' => $this->building()->id,
+            ...$this->workId(), 'building_id' => $this->building()->id,
             'description' => 'A',
             'planned_date' => '2026-04-05',
         ]));
