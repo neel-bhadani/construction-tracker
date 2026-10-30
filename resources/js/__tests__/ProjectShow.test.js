@@ -52,7 +52,7 @@ describe('project page', () => {
     expect(w.find('[data-test="common-summary"]').text()).toContain('4 activities')
     expect(w.find('[data-test="project-code"]').text()).toBe('TP')
     const tabs = w.findAll('[data-test="project-tab"]')
-    expect(tabs.map(t => t.text())).toEqual(['Buildings', 'Common activities'])
+    expect(tabs.map(t => t.text())).toEqual(['Buildings', 'Common activities', 'All activities'])
     expect(tabs[0].attributes('aria-current')).toBe('page')
     expect(tabs[1].attributes('href')).toBe('/projects/7/common')
   })

@@ -6,6 +6,7 @@ import ProjectFormModal from '@/Components/ProjectFormModal.vue'
 import BuildingFormModal from '@/Components/BuildingFormModal.vue'
 import ConfirmDialog from '@/Components/ConfirmDialog.vue'
 import TimelineView from '@/Components/TimelineView.vue'
+import AllActivities from '@/Components/AllActivities.vue'
 import { formatDate, signed, percent, leadText } from '@/lib/format'
 
 /*
@@ -14,6 +15,8 @@ import { formatDate, signed, percent, leadText } from '@/lib/format'
  |   (progress, lead, forecast finish); a click on a card opens the building.
  | - Common activities: the project's own timeline of site-wide work, the same
  |   view a building's page has.
+ | - All activities: every activity of the project in one list, grouped by
+ |   timeline, with search and filters (groups: AllActivitiesPage output).
  | Every figure is ProjectSummaryService output, or TimelinePage's (timeline).
  */
 const props = defineProps({
@@ -22,11 +25,14 @@ const props = defineProps({
   copySources: Array,
   tab: { type: String, default: 'buildings' },
   timeline: { type: Object, default: null },
+  groups: { type: Array, default: null },
+  today: { type: String, default: null },
 })
 
 const tabs = computed(() => [
   { key: 'buildings', label: 'Buildings', href: `/projects/${props.project.id}` },
   { key: 'common', label: 'Common activities', href: `/projects/${props.project.id}/common` },
+  { key: 'all', label: 'All activities', href: `/projects/${props.project.id}/activities` },
 ])
 const tabLabel = computed(() => tabs.value.find(t => t.key === props.tab).label)
 
@@ -71,7 +77,7 @@ const confirmDelete = () => {
     <div class="mb-5 flex flex-wrap items-center gap-3">
       <nav class="flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-1" aria-label="Project">
         <Link v-for="t in tabs" :key="t.key" :href="t.href" data-test="project-tab"
-              class="rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors max-md:py-2.5"
+              class="inline-flex items-center rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors max-md:min-h-11"
               :class="t.key === tab ? 'bg-teal-700 text-white' : 'text-slate-600 hover:bg-slate-50'"
               :aria-current="t.key === tab ? 'page' : undefined">{{ t.label }}</Link>
       </nav>
@@ -82,6 +88,8 @@ const confirmDelete = () => {
     <TimelineView v-if="tab === 'common' && timeline" :project-id="project.id" :building="timeline.building"
                   :metrics="timeline.metrics" :projection="timeline.projection" :chart="timeline.chart"
                   :activities="timeline.activities" :today="timeline.today" />
+
+    <AllActivities v-if="tab === 'all' && groups" :project="project" :groups="groups" :today="today" />
 
     <template v-if="tab === 'buildings'">
       <!-- the whole project at a glance: work-days done across its buildings and common activities -->

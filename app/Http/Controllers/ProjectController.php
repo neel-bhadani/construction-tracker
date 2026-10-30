@@ -6,8 +6,10 @@ use App\Exceptions\ProjectHasBuildingsException;
 use App\Http\Requests\ProjectRequest;
 use App\Models\Building;
 use App\Models\Project;
+use App\Services\AllActivitiesPage;
 use App\Services\ProjectEditor;
 use App\Services\ProjectSummaryService;
+use App\Services\ScheduleDays;
 use App\Services\TimelinePage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -55,6 +57,19 @@ class ProjectController extends Controller
             ...$this->page($request, $project),
             'tab' => 'common',
             'timeline' => $timeline->props($project, $project->commonActivities()->firstOrFail()),
+        ]);
+    }
+
+    /** The project page, All activities tab: every activity of the project, grouped by timeline. */
+    public function activities(Request $request, Project $project, AllActivitiesPage $page): Response
+    {
+        Gate::authorize('view', $project);
+
+        return Inertia::render('Projects/Show', [
+            ...$this->page($request, $project),
+            'tab' => 'all',
+            'groups' => $page->groups($project),
+            'today' => ScheduleDays::toDate(ScheduleDays::currentDay(null, $project->timezone)),
         ]);
     }
 

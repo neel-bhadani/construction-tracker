@@ -8,10 +8,17 @@ decisions: `docs/PLAN_V5.md`.
 
 - **One real user** (the client). No roles, approval, sharing or invites; don't add them.
 - **Owner-only access.** `projects.owner_id`; every query and policy checks it, and another account's project,
-  building or activity is a 404 on every page and API route. A new signed-in route needs an ownership
+  building, activity or sub-activity is a 404 on every page and API route. A new signed-in route needs an ownership
   case in `tests/Feature/OwnershipTest.php`, which fails otherwise.
 - Planned dates are written only by `ScheduleRecalculator`. Building % is the workbook's own figure
   (`BuildingMetricsService`); project % comes from `ProgressService`, in work-days. There are no floors.
+- **Work IDs** (`SV-012`, sub-activities `SV-012.3`) are given only by `WorkIds` / `SubActivityEditor` inside
+  the writing transaction; never typed, reused or renumbered. Anything that inserts activities must go through
+  `ScheduleEditor` or `PlanWriter`.
+- **Common activities**: the project's one `common_work` building, created with the project, shown on the
+  project page; never a building tab or card, never renamed, moved or deleted on its own.
+- **Sub-activities** change only through `SubActivityEditor`, which sets the activity's actual date (all at
+  100%: latest done date; otherwise none). They never move planned dates or building/project %.
 
 ## Import flow
 
@@ -20,7 +27,8 @@ decisions: `docs/PLAN_V5.md`.
    (git-ignored).
 3. `php artisan timeline:import-json <file> --owner=<email> --dry-run`, then without `--dry-run`; `--as=` for
    another project name. Validated by `PlanDocumentValidator`, written by `PlanImporter` in one transaction,
-   logged in `plan_imports`. The UI's Excel upload uses the same validator.
+   logged in `plan_imports`. The UI's Excel upload uses the same validator. The file's common timeline fills
+   the project's Common activities. Migrate before importing.
 
 ## Dev database safety
 

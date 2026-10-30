@@ -34,6 +34,7 @@ class OwnershipTest extends TestCase
     private const OWNED_ROUTES = [
         'projects.show' => 'view a project',
         'projects.common' => 'view the project\'s common activities',
+        'projects.activities' => 'view all of a project\'s activities',
         'projects.update' => 'edit a project',
         'projects.destroy' => 'delete a project',
         'buildings.store' => 'add a building',
@@ -198,6 +199,7 @@ class OwnershipTest extends TestCase
         [$method, $url, $body] = match ($route) {
             'projects.show' => ['get', "/projects/{$p}", []],
             'projects.common' => ['get', "/projects/{$p}/common", []],
+            'projects.activities' => ['get', "/projects/{$p}/activities", []],
             'projects.update' => ['patch', "/projects/{$p}", ['name' => 'Renamed', 'planned_start_date' => '2026-04-05', 'timezone' => 'Asia/Kolkata']],
             'projects.destroy' => ['delete', "/projects/{$this->empty->id}", []],
             'buildings.store' => ['post', "/projects/{$p}/buildings", ['name' => 'Tower C', 'type' => 'building', 'plan' => 'empty']],

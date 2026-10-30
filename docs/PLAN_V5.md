@@ -73,7 +73,7 @@ moves from X to Y" with the first 5 changed activities, or "No other dates chang
 - a break can't have an actual date
 - the oracle and the 151-row proof still pass
 
-## Phase 3: floors and 3-level progress (DONE)
+## Phase 3: floors and 3-level progress (DONE; removed in v5.1, see below)
 
 ### Schema
 
@@ -116,6 +116,9 @@ moves from X to Y" with the first 5 changed activities, or "No other dates chang
 A hand-made building with 3 floors plus common work, with every number worked out by hand, and the floor
 delete.
 
+> Floors were removed again in v5.1 (phase A): no table, column, route or screen is left. This phase is kept as
+> the record of what was built and why it went.
+
 ## Phase 4: Excel → JSON → DB (same approach as ~/lead-crm1, which is read only) (DONE)
 
 ### Step 1: `php artisan timeline:excel-to-json {--dir=} {--out=}`
@@ -156,3 +159,68 @@ delete.
 - CLAUDE.md, AGENTS.md and docs/system-design.md: one user, owner only, no roles, the import flow.
 - Phone check in Chrome at 360, 768 and 1280 px: the dialog, the Floors section, the profile and the
   header menu.
+
+---
+
+# v5.1: client requirements (October 2026)
+
+Done in four phases, each stopped for review and committed by the client's developer: A = remove floors and the
+import, B = Work ID and Common activities, C = sub-activities, D = All activities view and docs.
+
+## Decisions taken
+
+1. The first sub-activity added to an activity that is already done starts at 100%, done on the activity's
+   actual date. The dialog says: "This activity is done, so the new sub-activity starts at 100%. Change it to
+   reopen the activity."
+2. Deleting the last sub-activity leaves the activity's state and date as they are; it is marked done by hand
+   again.
+3. A done date follows the actual date's rules: not in the future, not before the building's actual start.
+4. Copying a plan copies sub-activity names and planned dates, at 0%, with no done dates and new Work IDs.
+5. Sub-activity numbers follow creation and are never renumbered; the list shows them in position order.
+6. `.claude/.headroom_*` is untracked and ignored.
+7. Deploy: migrate before importing (README).
+
+## Phase A: remove floors (DONE)
+
+- Migration `…000014_remove_floors`: drops `activities.floor_id` and `floors`; `down()` recreates them empty.
+- Gone: floor routes, controller, requests, policy, `FloorEditor`, `Floor`, `FloorProgress`, `FloorStatus`, the
+  floor part of `ProgressService`, the floors section, chips, tags, "Move to floor", "+ Add floors", the dialog's
+  Floor field, the Help section. `FloorsRemovedTest` checks no table, column, route or page text is left.
+- Import: no floor guesses or `floors` keys. `database/data/shaligram-vrundavan.json` regenerated with
+  `--force`; the dry run gives 151 of 151 dates and 27 of 27 figures.
+
+## Phase B: Work ID and Common activities (DONE)
+
+- Migration `…000015_work_ids_and_common_activities`: `projects.code` (+ `active_code`, unique per owner),
+  `projects.next_activity_number`, `activities.work_number` / `work_id`, backfilled common activities first,
+  then live buildings in order, then deleted ones. Each `common_work` building renamed "Common activities"
+  (same id); a live project without one gets an empty one; `buildings.live_common` keeps one per project.
+  Rehearsed on a copy of the dev data in the test database, up, down and up, before the dev run.
+- `WorkIds` gives `{code}-{nnn}` inside the writing transaction with the project row locked
+  (`WorkIdConcurrencyTest`). Shown in tables, cards, dialog titles and toasts.
+- Common activities: created with each project, shown as a project-page tab (`/projects/{id}/common`), not a
+  building tab or card; cannot be renamed, moved or deleted on its own. The import fills it from the file's
+  common timeline, written first.
+
+## Phase C: sub-activities (DONE)
+
+- Migration `…000016_create_sub_activities_table`: `sub_activities`, `sub_activity_revisions`,
+  `activities.next_sub_number`.
+- `SubActivityEditor`: create, update, soft delete, reorder; after each change the activity is done (actual
+  date = latest done date) when all are at 100%, not done otherwise. Breaks have none; an activity with
+  sub-activities has no hand-set actual date and cannot become a break.
+- UI: a % bar on every row; a chevron opens the list (Work ID, name, planned date, 0–100 quick buttons, done
+  date, note, ⋯ Edit / Move up / Move down / Delete), drag to reorder, "+ Add sub-activity".
+- Building and project % unchanged: the oracles stay green.
+
+## Phase D: All activities and docs (DONE)
+
+- `/projects/{id}/activities`: overall %, lead and forecast finish; one collapsible group per timeline (Common
+  activities first) with its own % and lead; rows with Work ID, name, bar, planned, actual, status, forecast,
+  opening to their sub-activities; search by name or Work ID; filters by group and status; the same Edit
+  dialog; cards on phones.
+- `AllActivitiesPage` reads activities and sub-activities in two queries for the project
+  (`AllActivitiesTest::test_the_queries_do_not_grow_with_the_rows`). Measured with 151 activities and 500
+  sub-activities on the dev machine: full page about 0.45 s, the Inertia request about 0.25 s.
+- Help page: the project page, Work ID, sub-activities, Common activities, All activities. README,
+  CLAUDE.md = AGENTS.md, this file, `system-design.md` section 11 and `database-structure.md` updated.

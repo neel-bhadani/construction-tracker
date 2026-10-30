@@ -30,6 +30,8 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
     Route::get('projects/{project}', [ProjectController::class, 'show'])->name('projects.show');
     // the project's own timeline of site-wide work, a tab of the project page
     Route::get('projects/{project}/common', [ProjectController::class, 'common'])->name('projects.common');
+    // every activity of the project, grouped by timeline, with search and filters
+    Route::get('projects/{project}/activities', [ProjectController::class, 'activities'])->name('projects.activities');
     Route::patch('projects/{project}', [ProjectController::class, 'update'])->name('projects.update');
     Route::delete('projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy');
 
