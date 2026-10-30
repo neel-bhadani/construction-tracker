@@ -44,8 +44,18 @@ class BuildingPageTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page->component('Buildings/Show')
                 ->where('project.name', 'Shaligram Vrundavan')
                 ->where('building.name', 'Tower B')
-                ->has('buildings', 3)
-                ->where('buildings.0.name', 'Tower A'));
+                // the building tabs; the common activities are the project page's
+                ->has('buildings', 2)
+                ->where('buildings.0.name', 'Tower A')
+                ->where('buildings.1.name', 'Tower B'));
+    }
+
+    public function test_the_common_activities_open_on_the_project_page(): void
+    {
+        $common = $this->project->commonActivities()->sole();
+
+        $this->actingAs($this->owner())->get("/projects/{$this->project->id}/buildings/{$common->id}")
+            ->assertRedirect("/projects/{$this->project->id}/common");
     }
 
     public function test_links_from_before_projects_existed_redirect_to_the_new_address(): void

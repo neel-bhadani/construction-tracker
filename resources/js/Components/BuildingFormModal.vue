@@ -9,8 +9,9 @@ import { uploadFile } from '@/lib/http'
  | A new building's plan starts empty, copied from any building in one of
  | your projects, or imported from Excel. Copied and imported plans
  | bring the chain and durations, never actual dates or notes; their dates are
- | computed from this building's own start. Editing changes the name and type
- | only — start dates are the admin's, on the timeline page.
+ | computed from this building's own start. Editing changes the name only;
+ | start dates are on the timeline page. A new one is always a building: the
+ | project's Common activities are created with it.
  */
 const props = defineProps({
   show: Boolean,
@@ -23,7 +24,7 @@ const emit = defineEmits(['close'])
 const isEdit = computed(() => !!props.building)
 
 const form = useForm({
-  name: '', type: 'building', planned_start_date: '', plan: 'empty',
+  name: '', planned_start_date: '', plan: 'empty',
   copy_from: null, import_token: null, sheet: null,
 })
 
@@ -33,7 +34,6 @@ watch(() => props.show, (open) => {
   if (!open) return
   form.clearErrors()
   form.name = props.building?.name ?? ''
-  form.type = props.building?.type ?? 'building'
   form.planned_start_date = props.project.plannedStartDate
   form.plan = 'empty'
   form.copy_from = null
@@ -65,7 +65,7 @@ async function chooseFile(event) {
 const submit = () => {
   const options = { preserveScroll: true, onSuccess: () => emit('close') }
   if (isEdit.value) {
-    form.transform(data => ({ name: data.name, type: data.type }))
+    form.transform(data => ({ name: data.name }))
       .patch(`/projects/${props.project.id}/buildings/${props.building.id}`, options)
   } else {
     form.transform(data => data).post(`/projects/${props.project.id}/buildings`, options)
@@ -78,13 +78,6 @@ const submit = () => {
     <form id="building-form" class="space-y-4" @submit.prevent="submit">
       <FormField label="Name" required :error="form.errors.name">
         <input v-model="form.name" type="text" maxlength="100" placeholder="Tower C" />
-      </FormField>
-
-      <FormField label="Type" required :error="form.errors.type">
-        <div class="flex gap-4 text-sm text-slate-700">
-          <label class="flex items-center gap-2"><input v-model="form.type" type="radio" value="building" class="!min-h-0 !w-auto" /> Building</label>
-          <label class="flex items-center gap-2"><input v-model="form.type" type="radio" value="common_work" class="!min-h-0 !w-auto" /> Common work</label>
-        </div>
       </FormField>
 
       <template v-if="!isEdit">

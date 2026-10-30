@@ -24,9 +24,21 @@ class BuildingMetricsService
     {
         $project = $building->project()->withTrashed()->firstOrFail();
         $activities = $building->activities()->orderBy('sort_order')->orderBy('id')->get();
+
+        return $this->forActivities($building, $activities, $project->timezone, $today);
+    }
+
+    /**
+     * The same figures from activities already loaded, so a page showing every building's rows
+     * loads them once for all buildings.
+     *
+     * @param  Collection<int, Activity>  $activities  the building's, in row order
+     */
+    public function forActivities(Building $building, Collection $activities, string $timezone, ?DateTimeInterface $today = null): BuildingMetrics
+    {
         $start = ScheduleDays::toDay($building->actual_start_date ?? $building->planned_start_date);
 
-        return $this->calculate($activities, $start, ScheduleDays::currentDay($today, $project->timezone));
+        return $this->calculate($activities->values(), $start, ScheduleDays::currentDay($today, $timezone));
     }
 
     /**

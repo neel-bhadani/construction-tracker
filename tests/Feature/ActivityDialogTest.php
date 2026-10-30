@@ -54,7 +54,7 @@ class ActivityDialogTest extends TestCase
             ['Holi', 'C', 15, true, null],
         ] as $row => [$name, $after, $offset, $break, $actual]) {
             $this->ids[$name] = DB::table('activities')->insertGetId([
-                'building_id' => $this->building->id, 'description' => $name,
+                ...$this->workId(), 'building_id' => $this->building->id, 'description' => $name,
                 'predecessor_id' => $after === null ? null : $this->ids[$after],
                 'offset_days' => $offset, 'is_break' => $break, 'actual_date' => $actual,
                 'planned_date' => '2026-01-01', 'sort_order' => $row + 1,
@@ -282,7 +282,7 @@ class ActivityDialogTest extends TestCase
     public function test_where_to_insert_must_be_a_row_of_this_building_and_only_for_a_new_activity(): void
     {
         $other = Building::create(['project_id' => $this->building->project_id, 'name' => 'Tower 2']);
-        $stranger = DB::table('activities')->insertGetId(['building_id' => $other->id, 'description' => 'X', 'planned_date' => '2026-01-01']);
+        $stranger = DB::table('activities')->insertGetId([...$this->workId(), 'building_id' => $other->id, 'description' => 'X', 'planned_date' => '2026-01-01']);
 
         $this->store([...$this->insertion('B', 7, push: true), 'after_id' => $stranger])
             ->assertSessionHasErrors(['after_id' => 'Choose a row from this building to insert below.']);

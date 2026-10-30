@@ -6,6 +6,7 @@ use App\Data\BuildingMetrics;
 use App\Models\Building;
 use App\Services\BuildingMetricsService;
 use App\Services\LeadProjectionService;
+use Database\Seeders\WorkbookSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\WorkbookOracle;
@@ -110,7 +111,7 @@ class WorkbookMetricsTest extends TestCase
 
     private function metrics(string $scope): BuildingMetrics
     {
-        return app(BuildingMetricsService::class)->forBuilding(Building::where('name', $scope)->sole());
+        return app(BuildingMetricsService::class)->forBuilding(Building::where('name', WorkbookSeeder::buildingName($scope))->sole());
     }
 
     /**

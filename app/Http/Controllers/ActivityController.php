@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Exceptions\ActivityHasDependantsException;
 use App\Http\Requests\ActivityPreviewRequest;
 use App\Http\Requests\ActivityRequest;
-use App\Http\Requests\MoveToFloorRequest;
 use App\Http\Requests\RecordActualRequest;
 use App\Models\Activity;
 use App\Models\Building;
@@ -27,14 +26,14 @@ class ActivityController extends Controller
     {
         $activity = $this->editor->create($building, $request->plan(), $request->user(), ...$request->insertion());
 
-        return back()->with('success', "Added [{$activity->description}].");
+        return back()->with('success', "Added [{$activity->work_id} {$activity->description}].");
     }
 
     public function update(ActivityRequest $request, Activity $activity): RedirectResponse
     {
         $activity = $this->editor->update($activity, $request->plan(), $request->user());
 
-        return back()->with('success', "Saved [{$activity->description}].");
+        return back()->with('success', "Saved [{$activity->work_id} {$activity->description}].");
     }
 
     public function recordActual(RecordActualRequest $request, Activity $activity): RedirectResponse
@@ -47,15 +46,8 @@ class ActivityController extends Controller
         );
 
         return back()->with('success', $activity->actual_date
-            ? "Recorded [{$activity->description}] on {$activity->actual_date->format('j M Y')}."
-            : "Cleared the actual date of [{$activity->description}].");
-    }
-
-    public function moveToFloor(MoveToFloorRequest $request, Activity $activity): RedirectResponse
-    {
-        $activity = $this->editor->moveToFloor($activity, $request->filled('floor_id') ? $request->integer('floor_id') : null, $request->user());
-
-        return back()->with('success', "Moved [{$activity->description}] to ".($activity->floor?->name ?? 'Whole building').'.');
+            ? "Recorded [{$activity->work_id} {$activity->description}] on {$activity->actual_date->format('j M Y')}."
+            : "Cleared the actual date of [{$activity->work_id} {$activity->description}].");
     }
 
     public function destroy(Request $request, Activity $activity): RedirectResponse
@@ -68,7 +60,7 @@ class ActivityController extends Controller
             return back()->withErrors(['activity' => $exception->getMessage()]);
         }
 
-        return back()->with('success', "Deleted [{$activity->description}].");
+        return back()->with('success', "Deleted [{$activity->work_id} {$activity->description}].");
     }
 
     /** What a new activity would move, computed without writing. */

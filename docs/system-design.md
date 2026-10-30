@@ -321,7 +321,7 @@ simple enough to be obviously correct, and correctness is the entire value over 
 ### Authorisation
 
 One account, its own data. Each project has an owner (`projects.owner_id`); the owner can do everything with
-it, its buildings, floors and activities, and to every other account they do not exist: every policy answers
+it, its buildings, activities and sub-activities, and to every other account they do not exist: every policy answers
 404. `OwnershipTest` walks the route list and fails for a signed-in route without an ownership case. (Until
 v5 there were viewer, editor and admin roles; see section 11.)
 
@@ -377,7 +377,8 @@ date was nudged shows that with its reason on hover.
 | Modal | Fields |
 | --- | --- |
 | Record actual date | Date, note |
-| Add / edit activity | Name, floor, comes after, planned date ⇄ days after, actual date, break, note (since v5; section 11) |
+| Add / edit activity | Name, comes after, planned date ⇄ days after, actual date, break, note (since v5; section 11) |
+| Add / edit sub-activity | Name, planned date, progress 0–100%, done date, note (since v5.1; section 11) |
 
 The edit modal shows what will move before saving — "this changes 23 later dates; finish moves from 5 Aug to
 12 Aug" — and the save is refused with the cycle named if the chosen predecessor would create one.
@@ -537,27 +538,70 @@ The plan and its decisions are in [`PLAN_V5.md`](PLAN_V5.md). In short:
 
 ### Activity dialog
 
-Name, floor, comes after, planned date next to "N days after", actual date, break, note. The planned date is
+Name, comes after, planned date next to "N days after", actual date, break, note. The planned date is
 typed; the offset (what the workbook stores) follows. An adjustment is no longer typed in: it is shown
 read-only with a Clear link. "Insert activity below" places a new row under another and, with "push",
-relinks the row below so everything after it moves later. Actual dates never move.
+relinks the row below so everything after it moves later. Actual dates never move. With sub-activities the
+actual date is shown as "Done through its N sub-activities" and cannot be typed or cleared, and the activity
+cannot become a break.
 
-### Floors and progress
+### Progress
 
-Optional `floors` per building; `activities.floor_id` null is the whole building. `ProgressService` gives
-three levels in work-days: building (the workbook's figure, unchanged), floor (work-days of done activities ÷
-the floor's work-days), and project (work-days done ÷ total across buildings). Floor percentages need not add
-up to the building's: the building measures how far along its longest chain the work has reached, while
-breaks and common work belong to no floor.
+`ProgressService` gives two levels in work-days: building (the workbook's figure, `BuildingMetricsService`
+C12, unchanged) and project (work-days done ÷ total across all timelines, Common activities included). Floors
+were removed in v5.1 (migration `…000014`); nothing is computed per floor any more.
+
+### Work ID
+
+Every activity has a Work ID, `{project code}-{nnn}` (`SV-001`; past 999 it simply grows). `projects.code` comes
+from the name's initials (`Project::initials()`), is unique among one owner's live projects (a clash gets a
+number: `SV2`) and can be changed in Edit project; changing it leaves the IDs already given. `WorkIds` takes the
+next number from `projects.next_activity_number` inside the writing transaction, with the project row locked, so
+two creates at once wait for each other; numbers only go up and are never reused or renumbered. It is called
+by `ScheduleEditor::create` and `PlanWriter` (import, copied plan, Excel upload). The backfill numbered existing
+activities Common activities first, then the live buildings in order, then deleted buildings, each in list order.
+
+### Common activities
+
+The former `common_work` building ("Overall Timeline") is each project's **Common activities**: one per project
+(a unique index on `project_id` + the generated `live_common` flag), created with the project by
+`ProjectEditor::createProject`. It is a timeline like a building's (same `TimelineView`, chart, metrics and
+Excel checks) but lives on the project page (`/projects/{id}/common`), not as a building tab or card; its old
+building URL redirects there. It cannot be renamed, moved or deleted on its own (`BuildingPolicy::rename`,
+`move`, `delete`: a 403 with the reason for the owner, a 404 for anyone else); an empty one goes with its
+project. New buildings are always `building`.
+
+### Sub-activities
+
+Steps inside an activity (`sub_activities`): Work ID `{activity Work ID}.{n}` from the activity's
+`next_sub_number`, position, name, planned date, progress 0/25/50/75/100, done date (required at 100%, cleared
+below; the actual date's rules), note; soft-deleted; audited in `sub_activity_revisions`. Every write goes
+through `SubActivityEditor`, which then re-derives the activity: all at 100% → actual date = the latest done
+date; any below → actual date cleared (each change audited on the activity). The first one added to a done
+activity defaults to 100% on its actual date; deleting the last one leaves the activity as it is. Breaks have
+none. The activity's bar is the average (`Activity::progressPercent()`); building and project % stay the
+workbook's calculation, so a step moves them only by completing the activity, exactly as Mark done would.
+Copying a plan copies names and planned dates at 0%.
+
+### All activities
+
+`/projects/{id}/activities`: the project's overall %, lead (the most behind timeline's) and forecast finish,
+then one collapsible group per timeline (Common activities first) with its own % and lead, and every row with
+its Work ID, name, bar, dates, status and forecast, opening to its sub-activities. Search by name or Work ID
+(sub-activities' too), filter by group and status (All / Pending / Done / Next); a row opens the same Edit
+dialog. `AllActivitiesPage` reads the activities and their sub-activities in two queries for the whole project
+and computes each group with `BuildingMetricsService::forActivities()`, so the queries do not grow with the
+rows (`AllActivitiesTest`). Measured on the dev machine with 151 activities and 500 sub-activities: the full page
+in about 0.45 s, the Inertia request in about 0.25 s.
 
 ### Import: Excel → JSON → database
 
 1. `php artisan timeline:excel-to-json` reads the workbooks in `CLIENT_WORKBOOKS_DIR` into
-   `storage/app/private/imports/<date>/project.json` (git-ignored), guesses floors from activity names, prints
-   the guesses, and stores Excel's planned dates and Chart figures alongside.
-2. Correct floors in the JSON if needed.
-3. `php artisan timeline:import-json <file> --owner=<email> --dry-run`, then without `--dry-run`. It validates
-   (`PlanDocumentValidator`: shape, rows, floors, breaks, loops, every planned date), writes in one
-   transaction, reads back every date and figure against the file, and logs to `plan_imports`. A dry run does
-   the same and rolls back. The Excel upload in the UI goes through the same validator.
-
+   `storage/app/private/imports/<date>/project.json` (git-ignored), with Excel's planned dates and Chart
+   figures alongside.
+2. `php artisan timeline:import-json <file> --owner=<email> --dry-run`, then without `--dry-run`. It validates
+   (`PlanDocumentValidator`: shape, rows, breaks, loops, at most one common timeline, every planned date),
+   writes in one transaction, reads back every date and figure against the file, and logs to `plan_imports`.
+   The file's `common_work` timeline fills the project's own Common activities and is written first, so its
+   activities take the first Work IDs. A dry run does the same and rolls back. The Excel upload in the UI goes
+   through the same validator. Migrate before importing.

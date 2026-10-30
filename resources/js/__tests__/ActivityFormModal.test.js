@@ -135,34 +135,32 @@ describe('ActivityFormModal', () => {
     expect(w.text()).toContain('and 5 more')
   })
 
-  describe('the Floor field', () => {
-    const buildingFloors = [{ id: 11, name: 'Ground floor' }, { id: 12, name: '1st floor' }]
-    const floorSelect = w => w.findAll('select').find(s => s.findAll('option').some(o => o.text() === 'Whole building'))
-
-    it('offers Whole building and the floors', async () => {
-      const w = await open({ floors: buildingFloors })
-      expect(floorSelect(w).findAll('option').map(o => o.text())).toEqual(['Whole building', 'Ground floor', '1st floor'])
-    })
-
-    it('starts on the floor of the row inserted below, or of the filter', async () => {
-      const onGround = rows.map(r => (r.id === 2 ? { ...r, floor_id: 11 } : r))
-      expect(floorSelect(await open({ floors: buildingFloors, rows: onGround, insertAfter: onGround[1] })).element.value).toBe('11')
-      expect(floorSelect(await open({ floors: buildingFloors, floorId: 12 })).element.value).toBe('12')
-    })
-
-    it('is hidden for a break, and a break is saved on no floor', async () => {
-      const w = await open({ floors: buildingFloors, floorId: 12 })
-      await w.find('input[type="checkbox"]').setValue(true)
-      expect(floorSelect(w)).toBeUndefined()
-      expect(w.text()).toContain('A break has no actual date and is on no floor.')
-
-      const edit = await open({ floors: buildingFloors, activity: rows[4] })
-      expect(floorSelect(edit)).toBeUndefined()
-    })
-
-    it('is not there for a building without floors', async () => {
-      expect(floorSelect(await open({}))).toBeUndefined()
-    })
+  it('has no Floor field, and a break has no actual date', async () => {
+    const w = await open({})
+    expect(w.text()).not.toMatch(/\bfloors?\b/i)
+    await w.find('input[type="checkbox"]').setValue(true)
+    expect(w.text()).toContain('A break has no actual date.')
+    expect(w.text()).not.toMatch(/\bfloors?\b/i)
   })
 })
 
+
+describe('the title', () => {
+  it('names the activity by its Work ID', async () => {
+    const withIds = rows.map(r => ({ ...r, work_id: `TP-00${r.id}` }))
+    expect((await open({ rows: withIds, activity: withIds[1] })).find('h3').text()).toBe('Edit TP-002 B')
+    expect((await open({ rows: withIds, insertAfter: withIds[2] })).find('h3').text()).toBe('Insert below TP-003 C')
+    expect((await open({})).find('h3').text()).toBe('Add activity')
+  })
+})
+
+describe('with sub-activities', () => {
+  it('shows the actual date as theirs, sends none, and cannot become a break', async () => {
+    const withSubs = { ...rows[1], actualDate: '2026-02-01', sub_activities: [{ id: 1 }, { id: 2 }] }
+    const w = await open({ activity: withSubs })
+
+    expect(w.find('[data-test="done-through-subs"]').text()).toContain('Done through its 2 sub-activities: 1 Feb 2026.')
+    expect(w.findAll('input[type="date"]').some(i => i.attributes('max') === '2026-03-01')).toBe(false)
+    expect(w.find('input[type="checkbox"]').attributes('disabled')).toBeDefined()
+  })
+})

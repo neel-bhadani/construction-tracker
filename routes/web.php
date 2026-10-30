@@ -2,10 +2,10 @@
 
 use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\BuildingController;
-use App\Http\Controllers\FloorController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\SubActivityController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -28,6 +28,10 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
     Route::get('projects', [ProjectController::class, 'index'])->name('projects.index');
     Route::post('projects', [ProjectController::class, 'store'])->name('projects.store');
     Route::get('projects/{project}', [ProjectController::class, 'show'])->name('projects.show');
+    // the project's own timeline of site-wide work, a tab of the project page
+    Route::get('projects/{project}/common', [ProjectController::class, 'common'])->name('projects.common');
+    // every activity of the project, grouped by timeline, with search and filters
+    Route::get('projects/{project}/activities', [ProjectController::class, 'activities'])->name('projects.activities');
     Route::patch('projects/{project}', [ProjectController::class, 'update'])->name('projects.update');
     Route::delete('projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy');
 
@@ -41,15 +45,6 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
         Route::patch('projects/{project}/buildings/{building}/dates', [BuildingController::class, 'dates'])->name('buildings.dates');
         Route::patch('projects/{project}/buildings/{building}/move', [BuildingController::class, 'move'])->name('buildings.move');
         Route::delete('projects/{project}/buildings/{building}', [BuildingController::class, 'destroy'])->name('buildings.destroy');
-
-        // floors belong to their building, the same way
-        Route::get('projects/{project}/buildings/{building}/floors', [FloorController::class, 'index'])->name('floors.index');
-        Route::post('projects/{project}/buildings/{building}/floors', [FloorController::class, 'store'])->name('floors.store');
-        // "Ground + 1 to 13"
-        Route::post('projects/{project}/buildings/{building}/floors/range', [FloorController::class, 'range'])->name('floors.range');
-        Route::patch('projects/{project}/buildings/{building}/floors/{floor}', [FloorController::class, 'update'])->name('floors.update');
-        // its activities move to the whole building
-        Route::delete('projects/{project}/buildings/{building}/floors/{floor}', [FloorController::class, 'destroy'])->name('floors.destroy');
     });
 
     // the first step of "Import from Excel": upload, get the sheet names back
@@ -60,8 +55,6 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
 
     // what happened on site
     Route::patch('activities/{activity}/actual', [ActivityController::class, 'recordActual'])->name('activities.actual');
-    // "Move to floor"
-    Route::patch('activities/{activity}/floor', [ActivityController::class, 'moveToFloor'])->name('activities.floor');
 
     // the plan
     Route::post('buildings/{building}/activities', [ActivityController::class, 'store'])->name('activities.store');
@@ -69,6 +62,12 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
     Route::delete('activities/{activity}', [ActivityController::class, 'destroy'])->name('activities.destroy');
     Route::post('buildings/{building}/activities/preview', [ActivityController::class, 'previewNew'])->name('activities.preview-new');
     Route::post('activities/{activity}/preview', [ActivityController::class, 'previewEdit'])->name('activities.preview-edit');
+
+    // the steps inside an activity; they set its actual date once all are done
+    Route::post('activities/{activity}/sub-activities', [SubActivityController::class, 'store'])->name('sub-activities.store');
+    Route::patch('activities/{activity}/sub-activities/order', [SubActivityController::class, 'order'])->name('sub-activities.order');
+    Route::patch('sub-activities/{subActivity}', [SubActivityController::class, 'update'])->name('sub-activities.update');
+    Route::delete('sub-activities/{subActivity}', [SubActivityController::class, 'destroy'])->name('sub-activities.destroy');
 });
 
 require __DIR__.'/auth.php';

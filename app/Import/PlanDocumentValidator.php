@@ -16,8 +16,8 @@ use Illuminate\Validation\Rule;
  *
  * 1. Shape: Validator rules, as a Form Request would.
  * 2. Each building: rows unique, "comes after" a row of the same building, no row after itself,
- *    floors named in its floor list, breaks without an actual date or a floor, no actual date before
- *    the start.
+ *    breaks without an actual date, no actual date before the start.
+ *    At most one building is the common activities (common_work); it fills the project's own.
  * 3. The chain: the recalculator's own computation, in memory. A loop is reported with its rows;
  *    every planned date it gives must equal the JSON's planned_date, which is Excel's.
  *
@@ -48,8 +48,17 @@ class PlanDocumentValidator
         }
 
         $problems = [];
+        $common = array_filter($document['buildings'], fn (array $building) => $building['type'] === BuildingType::CommonWork->value);
+        if (count($common) > 1) {
+            $problems[] = 'Only one timeline can be the common activities: '.implode(', ', array_column($common, 'name')).'.';
+        }
+
         foreach ($document['buildings'] as $building) {
             array_push($problems, ...$this->building($building));
+
+            if ($building['type'] === BuildingType::Building->value && mb_strtolower($building['name']) === mb_strtolower(BuildingType::CommonWork->label())) {
+                $problems[] = "{$building['name']}: the name is the project's own Common activities; choose another.";
+            }
 
             if (! isset($document['expected'][$building['name']])) {
                 $problems[] = "{$building['name']}: no expected figures in `expected`.";
@@ -85,15 +94,6 @@ class PlanDocumentValidator
             $rows[$activity['row']] = $activity;
         }
 
-        $floorNames = [];
-        foreach ($building['floors'] ?? [] as $floor) {
-            $key = mb_strtolower($floor['name']);
-            if (isset($floorNames[$key])) {
-                $problems[] = "{$name}: the floor [{$floor['name']}] is listed twice.";
-            }
-            $floorNames[$key] = true;
-        }
-
         $start = $building['actual_start'] ?? $building['planned_start'];
         foreach ($rows as $row => $activity) {
             $after = $activity['comes_after_row'] ?? null;
@@ -104,14 +104,8 @@ class PlanDocumentValidator
             } elseif ($after === $row) {
                 $problems[] = "{$label}: comes after itself.";
             }
-            if (($activity['floor'] ?? null) !== null && ! isset($floorNames[mb_strtolower($activity['floor'])])) {
-                $problems[] = "{$label}: is on [{$activity['floor']}], which is not in this building's floors.";
-            }
             if ($activity['is_break'] && ($activity['actual_date'] ?? null) !== null) {
                 $problems[] = "{$label}: a break has no actual date.";
-            }
-            if ($activity['is_break'] && ($activity['floor'] ?? null) !== null) {
-                $problems[] = "{$label}: a break is on no floor.";
             }
             if (($activity['actual_date'] ?? null) !== null && $activity['actual_date'] < $start) {
                 $problems[] = "{$label}: the actual date {$activity['actual_date']} is before the building's start ({$start}).";
@@ -170,15 +164,11 @@ class PlanDocumentValidator
             "{$prefix}type" => ['required', Rule::enum(BuildingType::class)],
             "{$prefix}planned_start" => ['required', 'date_format:Y-m-d'],
             "{$prefix}actual_start" => ['nullable', 'date_format:Y-m-d'],
-            "{$prefix}floors" => ['present', 'array'],
-            "{$prefix}floors.*.name" => ['required', 'string', 'max:50'],
-            "{$prefix}floors.*.level" => ['required', 'integer', 'min:-20', 'max:300'],
             "{$prefix}activities" => ['required', 'array', 'min:1'],
             "{$activity}row" => ['required', 'integer', 'min:1'],
             "{$activity}position" => ['required', 'integer', 'min:1'],
             "{$activity}name" => ['required', 'string', 'max:255'],
             "{$activity}is_break" => ['required', 'boolean'],
-            "{$activity}floor" => ['nullable', 'string', 'max:50'],
             "{$activity}comes_after_row" => ['nullable', 'integer'],
             "{$activity}offset_days" => ['required', 'integer', 'min:0', 'max:65535'],
             "{$activity}adjustment" => ['required', 'integer', 'min:-32768', 'max:32767'],
@@ -198,7 +188,7 @@ class PlanDocumentValidator
     {
         $lines = [];
         foreach ($errors as $path => $messages) {
-            $where = preg_replace(['/^buildings\.(\d+)\./', '/activities\.(\d+)\./', '/floors\.(\d+)\./'], ['building $1, ', 'activity $1, ', 'floor $1, '], $path);
+            $where = preg_replace(['/^buildings\.(\d+)\./', '/activities\.(\d+)\./'], ['building $1, ', 'activity $1, '], $path);
             foreach ($messages as $message) {
                 $lines[] = ($building === null ? '' : "{$building}: ")."{$where}: {$message}";
             }

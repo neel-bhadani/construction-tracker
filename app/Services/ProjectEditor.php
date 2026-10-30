@@ -2,15 +2,16 @@
 
 namespace App\Services;
 
+use App\Enums\BuildingType;
 use App\Exceptions\PlanImportException;
 use App\Exceptions\ProjectHasBuildingsException;
 use App\Import\ScheduleWorkbook;
 use App\Models\Activity;
 use App\Models\Building;
 use App\Models\BuildingRevision;
-use App\Models\Floor;
 use App\Models\Project;
 use App\Models\ProjectRevision;
+use App\Models\SubActivity;
 use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
@@ -24,17 +25,16 @@ use UnexpectedValueException;
  */
 class ProjectEditor
 {
-    private const PROJECT_FIELDS = ['name', 'details', 'planned_start_date', 'timezone'];
+    private const PROJECT_FIELDS = ['name', 'code', 'details', 'planned_start_date', 'timezone'];
 
-    private const BUILDING_FIELDS = ['name', 'type'];
+    private const BUILDING_FIELDS = ['name'];
 
-    public function __construct(
-        private readonly PlanWriter $writer,
-        private readonly FloorEditor $floors,
-    ) {}
+    public function __construct(private readonly PlanWriter $writer) {}
 
     /**
-     * @param  array{name: string, details: ?string, planned_start_date: string, timezone?: string}  $data
+     * A new project, with its Common activities, empty. Without a code it takes its initials.
+     *
+     * @param  array{name: string, code?: ?string, details: ?string, planned_start_date: string, timezone?: string}  $data
      */
     public function createProject(array $data, User $user): Project
     {
@@ -45,6 +45,15 @@ class ProjectEditor
             $project->save();
 
             $this->projectRevision($project, $user, 'created', null, $project->name);
+
+            $common = Building::create([
+                'project_id' => $project->id,
+                'name' => BuildingType::CommonWork->label(),
+                'type' => BuildingType::CommonWork,
+                'planned_start_date' => $project->planned_start_date,
+                'sort_order' => 0,
+            ]);
+            $this->buildingRevision($common, $user, 'created', null, $common->name);
 
             return $project->refresh();
         });
@@ -72,18 +81,29 @@ class ProjectEditor
     }
 
     /**
+     * Only an empty project: no buildings, and no common activities. Its empty Common activities
+     * goes with it.
+     *
      * @throws ProjectHasBuildingsException
      */
     public function deleteProject(Project $project, User $user): void
     {
         DB::transaction(function () use ($project, $user) {
             $project = Project::lockForUpdate()->findOrFail($project->id);
-            $buildings = $project->buildings()->orderBy('sort_order')->orderBy('id')->pluck('name')->all();
+            $timelines = $project->buildings()->withCount('activities')->orderByRaw("type != 'common_work'")
+                ->orderBy('sort_order')->orderBy('id')->get();
+            $kept = $timelines->reject(fn (Building $building) => $building->isCommon() && $building->activities_count === 0);
 
-            if ($buildings !== []) {
-                throw new ProjectHasBuildingsException($project->name, $buildings);
+            if ($kept->isNotEmpty()) {
+                throw new ProjectHasBuildingsException($project->name, $kept->map(fn (Building $building) => $building->isCommon()
+                    ? "the {$building->activities_count} common ".($building->activities_count === 1 ? 'activity' : 'activities')
+                    : $building->name)->all());
             }
 
+            foreach ($timelines as $common) {
+                $this->buildingRevision($common, $user, 'deleted', $common->name, null);
+                $common->delete();
+            }
             $this->projectRevision($project, $user, 'deleted', $project->name, null);
             $project->delete();
         });
@@ -95,7 +115,7 @@ class ProjectEditor
      * actual dates or notes, which belong to the site they were recorded on — and their dates are
      * computed from this building's own start.
      *
-     * @param  array{name: string, type: string, planned_start_date?: ?string}  $data
+     * @param  array{name: string, type?: string, planned_start_date?: ?string}  $data
      *
      * @throws PlanImportException
      */
@@ -107,7 +127,7 @@ class ProjectEditor
             $building = Building::create([
                 'project_id' => $project->id,
                 'name' => $data['name'],
-                'type' => $data['type'],
+                'type' => $data['type'] ?? BuildingType::Building->value,
                 'planned_start_date' => $data['planned_start_date'] ?? $project->planned_start_date,
                 'sort_order' => $last + 1,
             ]);
@@ -115,7 +135,7 @@ class ProjectEditor
             $this->buildingRevision($building, $user, 'created', null, $building->name, $origin);
 
             if ($plan instanceof Building) {
-                $this->writer->write($building, $this->copiedPlan($plan, $this->copyFloors($plan, $building, $user)), $user, $origin);
+                $this->writer->write($building, $this->copiedPlan($plan), $user, $origin);
             } elseif ($plan instanceof ScheduleWorkbook) {
                 $this->writer->write($building, $plan->plan(withActualDates: false), $user, $origin);
 
@@ -130,7 +150,7 @@ class ProjectEditor
     }
 
     /**
-     * @param  array{name: string, type: string}  $data
+     * @param  array{name: string}  $data
      */
     public function updateBuilding(Building $building, array $data, User $user): Building
     {
@@ -150,11 +170,11 @@ class ProjectEditor
         });
     }
 
-    /** Swap a building with its neighbour in the project's order. */
+    /** Swap a building with its neighbour in the project's order. Common activities have no place in it. */
     public function moveBuilding(Building $building, string $direction, User $user): void
     {
         DB::transaction(function () use ($building, $direction, $user) {
-            $siblings = Building::where('project_id', $building->project_id)
+            $siblings = Building::where('project_id', $building->project_id)->where('type', BuildingType::Building)
                 ->orderBy('sort_order')->orderBy('id')->lockForUpdate()->get()->values();
             $index = $siblings->search(fn (Building $sibling) => $sibling->id === $building->id);
             $neighbour = $siblings->get($direction === 'up' ? $index - 1 : $index + 1);
@@ -196,30 +216,15 @@ class ProjectEditor
     }
 
     /**
-     * The source's floors, same names and levels, in the new building.
+     * Each activity's sub-activities come along as names and planned dates, at 0%.
      *
-     * @return array<int, int> new floor id for each source floor id
-     */
-    private function copyFloors(Building $source, Building $building, User $user): array
-    {
-        $ids = [];
-        foreach (Floor::where('building_id', $source->id)->orderBy('level')->orderBy('id')->get() as $floor) {
-            $ids[$floor->id] = $this->floors->add($building, $floor->name, $floor->level, $user)->id;
-        }
-
-        return $ids;
-    }
-
-    /**
-     * @param  array<int, int>  $floorIds  new floor id for each source floor id
      * @return array<int, array<string, mixed>>
      */
-    private function copiedPlan(Building $source, array $floorIds): array
+    private function copiedPlan(Building $source): array
     {
-        return Activity::where('building_id', $source->id)->orderBy('sort_order')->orderBy('id')->get()
+        return Activity::where('building_id', $source->id)->with('subActivities:id,activity_id,name,planned_date,position')
+            ->orderBy('sort_order')->orderBy('id')->get()
             ->mapWithKeys(fn (Activity $activity) => [$activity->id => [
-                // an activity on a deleted floor is the whole building's, as in the source
-                'floor_id' => $floorIds[$activity->floor_id] ?? null,
                 'description' => $activity->description,
                 'predecessor' => $activity->predecessor_id,
                 'offset_days' => $activity->offset_days,
@@ -227,6 +232,10 @@ class ProjectEditor
                 'adjustment_reason' => $activity->adjustment_reason,
                 'is_break' => $activity->is_break,
                 'sort_order' => $activity->sort_order,
+                'sub_activities' => $activity->subActivities->map(fn (SubActivity $sub) => [
+                    'name' => $sub->name,
+                    'planned_date' => $sub->planned_date?->toDateString(),
+                ])->all(),
             ]])
             ->all();
     }

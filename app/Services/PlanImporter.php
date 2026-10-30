@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Data\PlanImportResult;
+use App\Enums\BuildingType;
 use App\Exceptions\PlanImportException;
 use App\Import\PlanDocument;
 use App\Import\PlanDocumentValidator;
@@ -29,7 +30,6 @@ class PlanImporter
     public function __construct(
         private readonly PlanDocumentValidator $validator,
         private readonly ProjectEditor $projects,
-        private readonly FloorEditor $floors,
         private readonly PlanWriter $writer,
         private readonly BuildingMetricsService $metrics,
     ) {}
@@ -92,20 +92,29 @@ class PlanImporter
         $mismatches = [];
         $datesChecked = $figuresChecked = 0;
 
-        foreach ($document['buildings'] as $data) {
-            $building = $this->projects->createBuilding($project, [
-                'name' => $data['name'], 'type' => $data['type'], 'planned_start_date' => $data['planned_start'],
-            ], $owner, origin: "imported from {$file}");
+        // the buildings keep the file's order; the common timeline is written first, so its
+        // activities take the first Work IDs, as the backfill numbered them
+        $order = 0;
+        foreach ($document['buildings'] as $index => $data) {
+            $document['buildings'][$index]['sort_order'] = $data['type'] === BuildingType::CommonWork->value ? 0 : ++$order;
+        }
+        $timelines = collect($document['buildings'])->sortBy(fn (array $data) => $data['type'] === BuildingType::CommonWork->value ? 0 : 1);
+
+        foreach ($timelines as $data) {
+            if ($data['type'] === BuildingType::CommonWork->value) {
+                // the project's own Common activities, created with it
+                $building = $project->commonActivities()->sole();
+                $building->forceFill(['planned_start_date' => $data['planned_start']])->save();
+            } else {
+                $building = $this->projects->createBuilding($project, [
+                    'name' => $data['name'], 'planned_start_date' => $data['planned_start'],
+                ], $owner, origin: "imported from {$file}");
+            }
             if ($data['actual_start'] !== null) {
                 $building->forceFill(['actual_start_date' => $data['actual_start']])->save();
             }
 
-            $floorIds = [];
-            foreach ($data['floors'] as $floor) {
-                $floorIds[mb_strtolower($floor['name'])] = $this->floors->add($building, $floor['name'], $floor['level'], $owner)->id;
-            }
-
-            $this->writer->write($building, $this->rows($data['activities'], $floorIds), $owner, "imported from {$file}");
+            $this->writer->write($building, $this->rows($data['activities']), $owner, "imported from {$file}");
 
             // read back from the database: Excel's planned dates, then the Chart sheet's figures
             $stored = Activity::where('building_id', $building->id)->pluck('planned_date', 'sort_order');
@@ -128,16 +137,17 @@ class PlanImporter
                 }
             }
 
-            $buildings[] = [
-                'name' => $data['name'],
+            $buildings[$data['sort_order']] = [
+                'name' => $building->name,
                 'type' => $data['type'],
-                'floors' => count($floorIds),
                 'activities' => count($data['activities']),
                 'actuals' => count(array_filter(array_column($data['activities'], 'actual_date'))),
                 'breaks' => count(array_filter(array_column($data['activities'], 'is_break'))),
-                'onFloors' => count(array_filter(array_column($data['activities'], 'floor'))),
             ];
         }
+
+        ksort($buildings);
+        $buildings = array_values($buildings);
 
         if ($mismatches !== []) {
             throw new PlanImportException("The imported plan does not match the file. Nothing was written:\n  ".implode("\n  ", $mismatches));
@@ -159,10 +169,9 @@ class PlanImporter
      * The activities in the shape PlanWriter writes, keyed by row so "comes after" can find them.
      *
      * @param  list<array<string, mixed>>  $activities
-     * @param  array<string, int>  $floorIds  by lower-case floor name
      * @return array<int, array<string, mixed>>
      */
-    private function rows(array $activities, array $floorIds): array
+    private function rows(array $activities): array
     {
         $rows = [];
         foreach ($activities as $activity) {
@@ -175,7 +184,6 @@ class PlanImporter
                 'is_break' => $activity['is_break'],
                 'sort_order' => $activity['position'],
                 'actual_date' => $activity['actual_date'],
-                'floor_id' => $activity['floor'] === null ? null : $floorIds[mb_strtolower($activity['floor'])],
                 'notes' => $activity['note'] ?? null,
             ];
         }

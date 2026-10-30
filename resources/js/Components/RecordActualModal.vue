@@ -42,7 +42,7 @@ const clear = () => {
 <template>
   <Modal :show="show" title="Record actual date" max-width="max-w-md" @close="emit('close')">
     <template v-if="activity">
-      <p class="mb-1 font-semibold text-slate-900">{{ activity.description }}</p>
+      <p class="mb-1 font-semibold text-slate-900"><span v-if="activity.work_id" class="mr-1.5 font-mono text-sm text-slate-500">{{ activity.work_id }}</span>{{ activity.description }}</p>
       <p class="mb-5 text-sm text-slate-500">Planned for {{ formatDate(activity.plannedDate) }}</p>
 
       <form id="record-actual" class="space-y-4" @submit.prevent="submit">

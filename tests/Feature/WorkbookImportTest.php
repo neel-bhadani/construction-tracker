@@ -120,8 +120,8 @@ class WorkbookImportTest extends TestCase
             ['Tower A', 'DIWALI (08-11-2026) BREAK 20', 17, $reason],
             ['Tower B', 'DIWALI (08-11-2026) BREAK 20', 12, $reason],
             ['Tower B', 'HOLI (22-03-2027) BREAK 30', 7, $reason],
-            ['Overall Timeline', 'FIRE RELATED WORK 30', 7, $reason],
-            ['Overall Timeline', 'FIRE NOC AND LIFT NOC 45', 7, $reason],
+            ['Common activities', 'FIRE RELATED WORK 30', 7, $reason],
+            ['Common activities', 'FIRE NOC AND LIFT NOC 45', 7, $reason],
         ], $adjusted);
         $this->assertSame(0, DB::table('activities')->where('date_adjustment_days', 0)->whereNotNull('adjustment_reason')->count());
     }
@@ -232,7 +232,7 @@ class WorkbookImportTest extends TestCase
     {
         return DB::table('activities')
             ->join('buildings', 'buildings.id', '=', 'activities.building_id')
-            ->where('buildings.name', $scope)
+            ->where('buildings.name', WorkbookSeeder::buildingName($scope))
             ->orderBy('activities.sort_order')
             ->get(['activities.*']);
     }

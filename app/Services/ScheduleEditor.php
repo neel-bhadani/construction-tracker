@@ -9,6 +9,7 @@ use App\Models\Activity;
 use App\Models\ActivityRevision;
 use App\Models\Building;
 use App\Models\BuildingRevision;
+use App\Models\SubActivityRevision;
 use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
@@ -22,7 +23,7 @@ use Illuminate\Support\Facades\DB;
 class ScheduleEditor
 {
     /** The plan's fields; changing any of the first three moves planned dates. */
-    public const PLAN_FIELDS = ['predecessor_id', 'offset_days', 'date_adjustment_days', 'adjustment_reason', 'description', 'is_break', 'notes', 'floor_id'];
+    public const PLAN_FIELDS = ['predecessor_id', 'offset_days', 'date_adjustment_days', 'adjustment_reason', 'description', 'is_break', 'notes'];
 
     private const CHAIN_FIELDS = ['predecessor_id', 'offset_days', 'date_adjustment_days'];
 
@@ -32,7 +33,10 @@ class ScheduleEditor
     /** What the activity dialog saves: the plan and the actual date. */
     private const DIALOG_FIELDS = [...self::PLAN_FIELDS, 'actual_date'];
 
-    public function __construct(private readonly ScheduleRecalculator $recalculator) {}
+    public function __construct(
+        private readonly ScheduleRecalculator $recalculator,
+        private readonly WorkIds $workIds,
+    ) {}
 
     /**
      * Run the recalculator's own computation on the graph as it would be after the change, in
@@ -121,6 +125,8 @@ class ScheduleEditor
             $activity = new Activity($this->normalise($data));
             $activity->building_id = $building->id;
             $activity->sort_order = $rows->max('sort_order') + 1;
+            $workIds = $this->workIds->take($building->project_id);
+            $activity->forceFill(['work_number' => array_key_first($workIds), 'work_id' => reset($workIds)]);
             $activity->forceFill(['planned_day' => 0, 'planned_date' => $building->planned_start_date])->save();
 
             $this->revision($activity, $user, 'created', null, $activity->description);
@@ -195,17 +201,6 @@ class ScheduleEditor
         });
     }
 
-    /** A floor moves no planned date, so there is no recalculation. */
-    public function moveToFloor(Activity $activity, ?int $floorId, User $user): Activity
-    {
-        return DB::transaction(function () use ($activity, $floorId, $user) {
-            $activity = Activity::lockForUpdate()->findOrFail($activity->id);
-            $this->apply($activity, ['floor_id' => $floorId], ['floor_id'], $user);
-
-            return $activity->refresh();
-        });
-    }
-
     /**
      * @throws ActivityHasDependantsException
      */
@@ -219,8 +214,13 @@ class ScheduleEditor
                 throw new ActivityHasDependantsException($activity->description, $dependants);
             }
 
-            // written first, so the foreign key nulls it with the rest of the trail
+            // written first, so the foreign key nulls it with the rest of the trail; its
+            // sub-activities' rows go with it, their trail stays
             $this->revision($activity, $user, 'deleted', $activity->description, null);
+            foreach ($activity->subActivities()->get(['id', 'name']) as $sub) {
+                SubActivityRevision::create(['sub_activity_id' => $sub->id, 'sub_activity_snapshot_id' => $sub->id,
+                    'user_id' => $user->id, 'field' => 'deleted', 'old_value' => $sub->name]);
+            }
             $building = $activity->building;
             $activity->delete();
 

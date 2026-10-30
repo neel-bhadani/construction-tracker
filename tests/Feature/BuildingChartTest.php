@@ -44,7 +44,7 @@ class BuildingChartTest extends TestCase
 
         foreach ([['A', null, 10, 0], ['B', 'A', 20, 0], ['C', 'A', 5, 3], ['D', 'B', 10, 0]] as $order => [$name, $after, $offset, $adjustment]) {
             $this->ids[$name] = DB::table('activities')->insertGetId([
-                'building_id' => $this->building->id, 'description' => $name, 'predecessor_id' => $after ? $this->ids[$after] : null,
+                ...$this->workId(), 'building_id' => $this->building->id, 'description' => $name, 'predecessor_id' => $after ? $this->ids[$after] : null,
                 'offset_days' => $offset, 'date_adjustment_days' => $adjustment, 'adjustment_reason' => $adjustment ? 'test' : null,
                 'planned_date' => '2026-01-01', 'sort_order' => $order + 1,
             ]);

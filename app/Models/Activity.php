@@ -15,12 +15,16 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * activities through the service that writes a placeholder and recalculates in the same
  * transaction, never with a bare Activity::create().
  *
+ * work_number and work_id ("SV-012") are given once, on create, by WorkIds, and never change.
+ *
+ * With sub-activities, actual_date is theirs to set (SubActivityEditor): the latest done date once
+ * all are at 100%, none before. Without, it is recorded by hand as always.
+ *
  * predecessor_id is ON DELETE RESTRICT: an activity with dependants cannot be deleted, and
  * hard-deleting its building fails while the chain is intact. See Building.
  */
 #[Fillable([
     'building_id',
-    'floor_id',
     'description',
     'predecessor_id',
     'offset_days',
@@ -53,7 +57,8 @@ class Activity extends Model
     protected function casts(): array
     {
         return [
-            'floor_id' => 'integer',
+            'work_number' => 'integer',
+            'next_sub_number' => 'integer',
             'offset_days' => 'integer',
             'date_adjustment_days' => 'integer',
             'is_break' => 'boolean',
@@ -73,16 +78,6 @@ class Activity extends Model
     }
 
     /**
-     * The floor it is on; null is the whole building (common work).
-     *
-     * @return BelongsTo<Floor, $this>
-     */
-    public function floor(): BelongsTo
-    {
-        return $this->belongsTo(Floor::class);
-    }
-
-    /**
      * @return BelongsTo<Activity, $this>
      */
     public function predecessor(): BelongsTo
@@ -96,6 +91,32 @@ class Activity extends Model
     public function dependants(): HasMany
     {
         return $this->hasMany(Activity::class, 'predecessor_id');
+    }
+
+    /**
+     * Its progress bar, 0 to 100: the average of its sub-activities' progress, or, without any,
+     * 100 once it has an actual date and 0 before. A break has none. Reads subActivities, so
+     * load it first for a list of activities.
+     */
+    public function progressPercent(): ?float
+    {
+        if ($this->is_break) {
+            return null;
+        }
+
+        return $this->subActivities->isEmpty()
+            ? ($this->actual_date === null ? 0.0 : 100.0)
+            : (float) $this->subActivities->avg('progress');
+    }
+
+    /**
+     * Its live sub-activities, in the order they are shown.
+     *
+     * @return HasMany<SubActivity, $this>
+     */
+    public function subActivities(): HasMany
+    {
+        return $this->hasMany(SubActivity::class)->orderBy('position')->orderBy('id');
     }
 
     /**

@@ -1,12 +1,15 @@
 <script setup>
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useForm } from '@inertiajs/vue3'
 import Modal from './Modal.vue'
 import FormField from './FormField.vue'
+import { cleanCode, initials } from '@/lib/projectCode'
 
 /*
  | The planned start is only the default for new buildings:
- | changing it moves no existing timeline.
+ | changing it moves no existing timeline. The code starts every Work ID; a new
+ | project's follows the name's initials until it is typed over, and changing
+ | it later leaves the IDs already given as they are.
  */
 const props = defineProps({
   show: Boolean,
@@ -18,12 +21,19 @@ const emit = defineEmits(['close'])
 
 const isEdit = computed(() => !!props.project)
 
-const form = useForm({ name: '', details: '', planned_start_date: '', timezone: '' })
+const form = useForm({ name: '', code: '', details: '', planned_start_date: '', timezone: '' })
+
+// a new project's code follows its name until it is typed over
+const codeTyped = ref(false)
+watch(() => form.name, name => { if (!isEdit.value && !codeTyped.value) form.code = initials(name) })
+const typeCode = event => { codeTyped.value = true; form.code = cleanCode(event.target.value); event.target.value = form.code }
 
 watch(() => props.show, (open) => {
   if (!open) return
   form.clearErrors()
   form.name = props.project?.name ?? ''
+  form.code = props.project?.code ?? ''
+  codeTyped.value = false
   form.details = props.project?.details ?? ''
   form.planned_start_date = props.project?.plannedStartDate ?? ''
   form.timezone = props.project?.timezone ?? props.defaultTimezone
@@ -41,6 +51,11 @@ const submit = () => {
     <form id="project-form" class="space-y-4" @submit.prevent="submit">
       <FormField label="Name" required :error="form.errors.name">
         <input v-model="form.name" type="text" maxlength="150" autofocus />
+      </FormField>
+
+      <FormField label="Code" :error="form.errors.code"
+                 :hint="isEdit ? 'Starts every Work ID. Changing it keeps the IDs already given.' : 'Starts every Work ID, like SV-001. From the name unless you type one.'">
+        <input :value="form.code" type="text" maxlength="8" class="font-mono uppercase" autocomplete="off" data-test="project-code" @input="typeCode" />
       </FormField>
 
       <FormField label="Details" :error="form.errors.details" hint="Optional: location, client contact, anything worth keeping with the project.">

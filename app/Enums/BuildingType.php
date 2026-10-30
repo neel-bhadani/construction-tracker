@@ -11,7 +11,7 @@ enum BuildingType: string
     {
         return match ($this) {
             self::Building => 'Building',
-            self::CommonWork => 'Common work',
+            self::CommonWork => 'Common activities',
         };
     }
 }

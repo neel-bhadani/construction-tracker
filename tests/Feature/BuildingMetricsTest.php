@@ -244,7 +244,7 @@ class BuildingMetricsTest extends TestCase
     private function activity(string $description, ?int $predecessorId, int $offset, ?string $actual = null, bool $isBreak = false): int
     {
         $id = DB::table('activities')->insertGetId([
-            'building_id' => $this->scope->id,
+            ...$this->workId(), 'building_id' => $this->scope->id,
             'description' => $description,
             'predecessor_id' => $predecessorId,
             'offset_days' => $offset,

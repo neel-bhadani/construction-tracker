@@ -29,23 +29,26 @@ class ProjectsTest extends TestCase
 
     /**
      * From the workbook figures already proven: done 180 + 190 + 180 of 853 + 843 + 825 planned
-     * days; leads +12, +7, +12; hold-lead finishes 24 Jul, 19 Jul, 26 Jun 2028.
+     * days; leads +12, +7, +12; hold-lead finishes 24 Jul, 19 Jul, 26 Jun 2028. The common
+     * activities count in the project's figures but are not one of the building cards.
      */
     public function test_project_summary_combines_its_buildings(): void
     {
         $summary = app(ProjectSummaryService::class)->summarise(Project::sole());
 
-        $this->assertSame(3, $summary->buildingsCount);
+        $this->assertSame(2, $summary->buildingsCount);
         $this->assertEqualsWithDelta(550 / 2521, $summary->progress, 1e-12);
         $this->assertSame(['id' => Building::where('name', 'Tower B')->value('id'), 'name' => 'Tower B', 'lead' => 7], $summary->mostBehind);
         $this->assertSame('2028-07-24', $summary->expectedHandover);
 
         $cards = collect($summary->buildings)->keyBy('name');
-        $this->assertSame(['Tower A', 'Tower B', 'Overall Timeline'], $cards->keys()->all());
-        $this->assertSame(['building', 'building', 'common_work'], $cards->pluck('type')->all());
-        $this->assertSame(['1st SLAB', '3rd SLAB 15', 'RCC WORK 280'], $cards->pluck('next')->all());
-        $this->assertSame([12, 7, 12], $cards->pluck('currentLead')->all());
-        $this->assertSame(['2028-07-24', '2028-07-19', '2028-06-26'], $cards->pluck('expectedHandover')->all());
+        $this->assertSame(['Tower A', 'Tower B'], $cards->keys()->all());
+        $this->assertSame(['building', 'building'], $cards->pluck('type')->all());
+        $this->assertSame(['1st SLAB', '3rd SLAB 15'], $cards->pluck('next')->all());
+        $this->assertSame([12, 7], $cards->pluck('currentLead')->all());
+        $this->assertSame(['2028-07-24', '2028-07-19'], $cards->pluck('expectedHandover')->all());
+        $this->assertSame(['Common activities', 'common_work', 'RCC WORK 280', 12, '2028-06-26'],
+            [$summary->common->name, $summary->common->type, $summary->common->next, $summary->common->currentLead, $summary->common->expectedHandover]);
     }
 
     /** Most behind skips buildings with no actuals; handover falls back to the planned finish. */
@@ -82,7 +85,7 @@ class ProjectsTest extends TestCase
                 ->has('projects', 2)
                 ->where('projects.0.name', 'Another')
                 ->where('projects.1.name', 'Shaligram Vrundavan')
-                ->where('projects.1.buildingsCount', 3)
+                ->where('projects.1.buildingsCount', 2)
                 ->where('projects.1.mostBehind.name', 'Tower B'));
     }
 
@@ -93,11 +96,13 @@ class ProjectsTest extends TestCase
         $this->actingAs($this->owner())->get("/projects/{$project->id}")->assertOk()
             ->assertInertia(fn (Assert $page) => $page->component('Projects/Show')
                 ->where('project.name', 'Shaligram Vrundavan')
-                ->has('project.buildings', 3)
-                ->where('project.buildings.2.typeLabel', 'Common work')
+                ->where('tab', 'buildings')
+                ->has('project.buildings', 2)
+                ->where('project.common.typeLabel', 'Common activities')
                 ->has('copySources', 3)
-                ->where('copySources.0.label', 'Shaligram Vrundavan › Tower A')
-                ->where('copySources.0.activities', 52)
+                ->where('copySources.0.label', 'Shaligram Vrundavan › Common activities')
+                ->where('copySources.1.label', 'Shaligram Vrundavan › Tower A')
+                ->where('copySources.1.activities', 52)
                 ->missing('can'));
     }
 
@@ -182,7 +187,7 @@ class ProjectsTest extends TestCase
         $project = Project::sole();
 
         $this->actingAs($this->owner())->delete("/projects/{$project->id}")
-            ->assertSessionHasErrors(['project' => '[Shaligram Vrundavan] still has buildings: Tower A, Tower B, Overall Timeline. Delete them first.']);
+            ->assertSessionHasErrors(['project' => '[Shaligram Vrundavan] still has the 47 common activities, Tower A, Tower B. Delete them first.']);
 
         $this->assertNotSoftDeleted($project);
         $this->assertSame(0, ProjectRevision::count());

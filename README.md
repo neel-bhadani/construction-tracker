@@ -4,8 +4,10 @@ Construction timeline tracker for Shaligram's projects. It replaces the client's
 reproducing them exactly: each building's schedule is a dependency graph, its planned dates are recalculated from
 the chain, and progress, pace, forecasts and lead follow the workbook's own formulas.
 
-- **Projects** hold **buildings**; a building is one timeline (a tower, or a project's common work), optionally
-  split into **floors**.
+- **Projects** hold **buildings** and one **Common activities** timeline (site-wide work); each is a timeline of
+  **activities**, and an activity can be split into **sub-activities** (0–100%) that mark it done when all are.
+- Every activity has a **Work ID** (`SV-012`; its sub-activities `SV-012.1`…), given automatically and never reused.
+- **All activities** shows the whole project in one list, grouped, with search and filters.
 - One account, its own data: whoever owns a project can do everything with it; every change is audited.
 - Same family as the Shaligram CRM: Laravel 13, Inertia, Vue 3, MySQL 8, Tailwind 4.
 
@@ -40,7 +42,7 @@ Then import the client's project: see [Importing the client's workbooks](#import
 | Command | What it does |
 | --- | --- |
 | `php artisan user:create` | Asks for name, email and password, and creates an account. Works while registration is closed. |
-| `php artisan project:transfer {project id} {email}` | Hands a project, with its buildings, floors, activities and history, to another account, in one transaction. Refuses if that account already has a project of the same name. Use it when the client registers. |
+| `php artisan project:transfer {project id} {email}` | Hands a project, with its buildings, Common activities, activities, sub-activities and history, to another account, in one transaction. Refuses if that account already has a project of the same name. Use it when the client registers. |
 | `php artisan timeline:excel-to-json {--dir=} {--out=} {--force}` | Import step 1: the workbooks to a JSON file. |
 | `php artisan timeline:import-json {file} --owner=<email> {--dry-run} {--as=}` | Import step 2: the JSON file to a new project of that account. |
 | `php artisan workbook:document` | Regenerates the seed-data section of `docs/database-structure.md`; `WorkbookDocumentTest` fails if it drifts. |
@@ -59,17 +61,13 @@ Then import the client's project: see [Importing the client's workbooks](#import
    repository. It parses the formulas, never evaluates them, and stores Excel's own planned dates and Chart-sheet
    figures in the file. It refuses to overwrite a file that is there already (`--force` to do it anyway).
 
-3. **Check the floors.** The command prints, per tower, the floor it guessed for every activity: "GF SLAB",
-   "DAY 1 TO GF SLAB" and "GROUND FLOOR …" (not "GROUND LEVEL …") → Ground floor, "1st SLAB" … "13th SLAB" → that floor, everything else (and every break)
-   → Whole building. The common-work timeline gets no floors. To correct one, change the activity's `"floor"` in
-   the JSON and make sure the building's `"floors"` list has it.
-
-4. **Dry run.** `php artisan timeline:import-json <file> --owner=<email> --dry-run` checks the file (shape, rows,
-   "comes after", floors, breaks, loops, every planned date against Excel), then does every insert in one
+3. **Dry run.** `php artisan timeline:import-json <file> --owner=<email> --dry-run` checks the file (shape, rows,
+   "comes after", breaks, loops, at most one common timeline, every planned date against Excel), then does every insert in one
    transaction, reads back every planned date and the %, lead, finish and forecasts against the file — and rolls
    it all back. Its report is exactly what a real run would do.
 
-5. **Import.** The same command without `--dry-run`. Any mismatch stops it and writes nothing. It refuses a project
+4. **Import.** The same command without `--dry-run`. The file's common timeline (Overall Timeline) fills the project's
+   own Common activities and is written first, so its activities take the first Work IDs (SV-001…). Any mismatch stops it and writes nothing. It refuses a project
    name the owner already has (`--as="Another name"` imports it under a different one) and a file already imported
    for that owner, and logs each import in `plan_imports`.
 
@@ -98,8 +96,13 @@ php artisan timeline:import-json database/data/shaligram-vrundavan.json --owner=
 php artisan optimize
 ```
 
-Read the dry run before the real one: three buildings, "Planned dates equal to the file (Excel): 151 of 151" and
-every figure equal to `expected`.
+**Migrate before you import.** `php artisan migrate --force` always comes first: the import writes Work IDs and fills
+the project's Common activities, which only exist once the migrations have run. On a database that already has the
+project, the Work ID migration renames its Overall Timeline to Common activities (same id, same data) and numbers
+every activity (SV-001…), common activities first.
+
+Read the dry run before the real one: Tower A, Tower B and the Common activities, "Planned dates equal to the file
+(Excel): 151 of 151" and every figure equal to `expected` (27 of 27).
 
 Running the import again is safe. The same file twice is refused (`plan_imports` holds its sha256 per owner), and so
 is a changed file while the owner has a project of that name; a failed run is one rolled-back transaction and
@@ -123,8 +126,10 @@ every page and API route. `OwnershipTest` walks the route list and fails for any
 | Address | Page |
 | --- | --- |
 | `/projects` | Home: every project with % done, most-behind building, expected handover |
-| `/projects/{id}` | One project: overall progress, a card per building (%, lead, forecast finish) |
-| `/projects/{id}/buildings/{id}` | The building's timeline: status, the progress chart, floors, the activity list, record actual, edit the plan with a preview of what moves |
+| `/projects/{id}` | One project, Buildings tab: overall progress, a card per building (%, lead, forecast finish), a line for the Common activities |
+| `/projects/{id}/common` | Common activities tab: the project's own timeline, as a building's page shows one |
+| `/projects/{id}/activities` | All activities tab: every activity grouped by timeline, with search, group and status filters |
+| `/projects/{id}/buildings/{id}` | The building's timeline: status, the progress chart, the activity list with % bars and sub-activities, record actual, edit the plan with a preview of what moves |
 | `/profile` | My profile: details and password |
 | `/help` | Help: how to use the app, in plain words |
 
@@ -139,7 +144,7 @@ pages.
 
 ```bash
 php artisan test   # PHP: services, endpoints, ownership, the import, the workbook oracles
-npm run test       # Vue: the dialogs, floors, the progress chart (Vitest + jsdom, ECharts mocked)
+npm run test       # Vue: the dialogs, sub-activities, All activities, the progress chart (Vitest + jsdom, ECharts mocked)
 ```
 
 Copy `.env.testing.example` to `.env.testing` and fill in the database credentials: Laravel loads it instead of

@@ -27,7 +27,7 @@ class TransferProjectCommandTest extends TestCase
         $this->withoutVite();
         $this->project = Project::create(['owner_id' => $this->owner()->id, 'name' => 'Vrundavan', 'planned_start_date' => '2026-04-05']);
         $building = Building::create(['project_id' => $this->project->id, 'name' => 'Tower A']);
-        DB::table('activities')->insert(['building_id' => $building->id, 'description' => 'Root', 'offset_days' => 10, 'planned_date' => '2026-04-15', 'sort_order' => 1]);
+        DB::table('activities')->insert([...$this->workId(), 'building_id' => $building->id, 'description' => 'Root', 'offset_days' => 10, 'planned_date' => '2026-04-15', 'sort_order' => 1]);
         $this->client = User::factory()->create(['email' => 'client@example.com']);
     }
 

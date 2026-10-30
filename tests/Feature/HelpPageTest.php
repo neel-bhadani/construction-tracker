@@ -34,4 +34,16 @@ class HelpPageTest extends TestCase
         $this->assertStringContainsString('Nothing to push', $help);
         $this->assertStringContainsString('Nothing to push', $dialog);
     }
+
+    /** The parts of version 5 each have their section; floors are gone. */
+    public function test_it_covers_sub_activities_work_ids_common_and_all_activities(): void
+    {
+        $help = file_get_contents(resource_path('js/Pages/Help.vue'));
+
+        foreach (["id: 'sub-activities'", "id: 'work-id'", "id: 'common'", "id: 'all'"] as $section) {
+            $this->assertStringContainsString($section, $help);
+        }
+        $this->assertStringContainsString('SV-012.3', $help);
+        $this->assertDoesNotMatchRegularExpression('/\bfloors?\b/i', $help);
+    }
 }

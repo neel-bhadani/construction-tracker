@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Enums\BuildingType;
 use App\Import\ScheduleWorkbook;
 use App\Models\Building;
 use App\Models\Project;
@@ -14,7 +15,8 @@ use RuntimeException;
 /**
  * One-off import of the client's project and its three timelines from the client's workbooks
  * (CLIENT_WORKBOOKS_DIR, never the repository): Tower A
- * and Tower B as buildings, Overall Timeline as the project's common work. The chain is parsed
+ * and Tower B as buildings, Overall Timeline as the project's Common activities, written first so
+ * its activities take the first Work IDs. The chain is parsed
  * from the formulas, then recalculated and compared row by row with the workbook's own cached
  * dates. A single mismatch rolls the whole import back.
  *
@@ -24,6 +26,12 @@ use RuntimeException;
 class WorkbookSeeder extends Seeder
 {
     public const PROJECT_NAME = 'Shaligram Vrundavan';
+
+    /** The building a workbook's timeline becomes: Overall Timeline is the project's Common activities. */
+    public static function buildingName(string $scope): string
+    {
+        return ScheduleWorkbook::TYPES[$scope] === BuildingType::CommonWork ? BuildingType::CommonWork->label() : $scope;
+    }
 
     public function run(PlanWriter $writer, ?User $owner = null): void
     {
@@ -44,10 +52,11 @@ class WorkbookSeeder extends Seeder
             $project = Project::create(['owner_id' => $owner->id, 'name' => self::PROJECT_NAME, 'planned_start_date' => $startDates[0]]);
             $mismatches = [];
 
-            foreach ($workbooks as $index => $workbook) {
+            $commonFirst = collect($workbooks)->sortBy(fn (ScheduleWorkbook $workbook) => ScheduleWorkbook::TYPES[$workbook->scope] === BuildingType::CommonWork ? 0 : 1);
+            foreach ($commonFirst as $index => $workbook) {
                 $building = Building::create([
                     'project_id' => $project->id,
-                    'name' => $workbook->scope,
+                    'name' => self::buildingName($workbook->scope),
                     'type' => ScheduleWorkbook::TYPES[$workbook->scope],
                     'planned_start_date' => $workbook->startDate,
                     'sort_order' => $index + 1,

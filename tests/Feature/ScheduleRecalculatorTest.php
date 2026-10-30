@@ -229,7 +229,7 @@ class ScheduleRecalculatorTest extends TestCase
     private function activity(string $description, ?int $predecessorId, int $offset, int $adjustment = 0, ?int $scopeId = null): int
     {
         return DB::table('activities')->insertGetId([
-            'building_id' => $scopeId ?? $this->scope->id,
+            ...$this->workId(), 'building_id' => $scopeId ?? $this->scope->id,
             'description' => $description,
             'predecessor_id' => $predecessorId,
             'offset_days' => $offset,

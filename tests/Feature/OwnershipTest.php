@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Import\ImportUploads;
 use App\Models\Building;
-use App\Models\Floor;
 use App\Models\Project;
 use App\Models\User;
 use App\Services\ScheduleRecalculator;
@@ -34,6 +33,8 @@ class OwnershipTest extends TestCase
     /** Route name => what the request does, against the owner's records. */
     private const OWNED_ROUTES = [
         'projects.show' => 'view a project',
+        'projects.common' => 'view the project\'s common activities',
+        'projects.activities' => 'view all of a project\'s activities',
         'projects.update' => 'edit a project',
         'projects.destroy' => 'delete a project',
         'buildings.store' => 'add a building',
@@ -50,12 +51,10 @@ class OwnershipTest extends TestCase
         'activities.destroy' => 'delete an activity',
         'activities.preview-new' => 'preview a new activity',
         'activities.preview-edit' => 'preview an edit',
-        'activities.floor' => 'move an activity to a floor',
-        'floors.index' => 'read the floors\' progress',
-        'floors.store' => 'add a floor',
-        'floors.range' => 'add floors ground to 13',
-        'floors.update' => 'rename a floor',
-        'floors.destroy' => 'delete a floor',
+        'sub-activities.store' => 'add a sub-activity',
+        'sub-activities.order' => 'reorder sub-activities',
+        'sub-activities.update' => 'change a sub-activity',
+        'sub-activities.destroy' => 'delete a sub-activity',
     ];
 
     private User $stranger;
@@ -72,7 +71,7 @@ class OwnershipTest extends TestCase
 
     private int $leaf;
 
-    private Floor $floor;
+    private int $sub;
 
     protected function setUp(): void
     {
@@ -85,10 +84,12 @@ class OwnershipTest extends TestCase
         $this->empty = Project::create(['owner_id' => $this->owner()->id, 'name' => 'Empty project', 'planned_start_date' => '2026-04-05']);
         $this->building = Building::create(['project_id' => $this->project->id, 'name' => 'Tower A', 'sort_order' => 1]);
         $this->spare = Building::create(['project_id' => $this->project->id, 'name' => 'Tower B', 'sort_order' => 2]);
-        $this->root = DB::table('activities')->insertGetId(['building_id' => $this->building->id, 'description' => 'Root', 'offset_days' => 10, 'planned_date' => '2026-04-05', 'sort_order' => 1]);
-        $this->leaf = DB::table('activities')->insertGetId(['building_id' => $this->building->id, 'description' => 'Leaf', 'predecessor_id' => $this->root, 'offset_days' => 5, 'planned_date' => '2026-04-05', 'sort_order' => 2]);
+        Building::create(['project_id' => $this->project->id, 'name' => 'Common activities', 'type' => 'common_work', 'sort_order' => 0]);
+        $this->root = DB::table('activities')->insertGetId([...$this->workId(), 'building_id' => $this->building->id, 'description' => 'Root', 'offset_days' => 10, 'planned_date' => '2026-04-05', 'sort_order' => 1]);
+        $this->leaf = DB::table('activities')->insertGetId([...$this->workId(), 'building_id' => $this->building->id, 'description' => 'Leaf', 'predecessor_id' => $this->root, 'offset_days' => 5, 'planned_date' => '2026-04-05', 'sort_order' => 2]);
         app(ScheduleRecalculator::class)->recalculate($this->building);
-        $this->floor = Floor::create(['building_id' => $this->building->id, 'name' => 'Ground floor', 'level' => 0]);
+        $this->sub = DB::table('sub_activities')->insertGetId(['activity_id' => $this->leaf, 'work_number' => 1, 'work_id' => 'T-1002.1', 'position' => 1, 'name' => 'Shuttering']);
+        DB::table('activities')->where('id', $this->leaf)->update(['next_sub_number' => 1]);
 
         // the other account has data of its own, with the same names
         $this->stranger = User::factory()->create(['name' => 'Someone Else']);
@@ -197,6 +198,8 @@ class OwnershipTest extends TestCase
         $b = $this->building->id;
         [$method, $url, $body] = match ($route) {
             'projects.show' => ['get', "/projects/{$p}", []],
+            'projects.common' => ['get', "/projects/{$p}/common", []],
+            'projects.activities' => ['get', "/projects/{$p}/activities", []],
             'projects.update' => ['patch', "/projects/{$p}", ['name' => 'Renamed', 'planned_start_date' => '2026-04-05', 'timezone' => 'Asia/Kolkata']],
             'projects.destroy' => ['delete', "/projects/{$this->empty->id}", []],
             'buildings.store' => ['post', "/projects/{$p}/buildings", ['name' => 'Tower C', 'type' => 'building', 'plan' => 'empty']],
@@ -213,12 +216,10 @@ class OwnershipTest extends TestCase
             'activities.destroy' => ['delete', "/activities/{$this->leaf}", []],
             'activities.preview-new' => ['post', "/buildings/{$b}/activities/preview", $this->chain()],
             'activities.preview-edit' => ['post', "/activities/{$this->leaf}/preview", $this->chain()],
-            'activities.floor' => ['patch', "/activities/{$this->leaf}/floor", ['floor_id' => $this->floor->id]],
-            'floors.index' => ['get', "/projects/{$p}/buildings/{$b}/floors", []],
-            'floors.store' => ['post', "/projects/{$p}/buildings/{$b}/floors", ['name' => '1st floor', 'level' => 1]],
-            'floors.range' => ['post', "/projects/{$p}/buildings/{$b}/floors/range", ['up_to' => 3]],
-            'floors.update' => ['patch', "/projects/{$p}/buildings/{$b}/floors/{$this->floor->id}", ['name' => 'Ground', 'level' => 0]],
-            'floors.destroy' => ['delete', "/projects/{$p}/buildings/{$b}/floors/{$this->floor->id}", []],
+            'sub-activities.store' => ['post', "/activities/{$this->leaf}/sub-activities", ['name' => 'Rebar']],
+            'sub-activities.order' => ['patch', "/activities/{$this->leaf}/sub-activities/order", ['ids' => [$this->sub]]],
+            'sub-activities.update' => ['patch', "/sub-activities/{$this->sub}", ['progress' => 50]],
+            'sub-activities.destroy' => ['delete', "/sub-activities/{$this->sub}", []],
         };
 
         if ($user !== null) {
@@ -258,7 +259,8 @@ class OwnershipTest extends TestCase
             'project_revisions' => $rows('project_revisions'),
             'building_revisions' => $rows('building_revisions'),
             'activity_revisions' => $rows('activity_revisions'),
-            'floors' => $rows('floors'),
+            'sub_activities' => $rows('sub_activities'),
+            'sub_activity_revisions' => $rows('sub_activity_revisions'),
         ];
     }
 }

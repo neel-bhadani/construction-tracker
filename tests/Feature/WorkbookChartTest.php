@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Building;
 use App\Services\BuildingChartService;
+use Database\Seeders\WorkbookSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\WorkbookOracle;
@@ -40,7 +41,7 @@ class WorkbookChartTest extends TestCase
     public function test_every_chart_point_matches_the_calc_sheet(string $scope): void
     {
         $expected = WorkbookOracle::calc($scope);
-        $rows = app(BuildingChartService::class)->rows(Building::where('name', $scope)->sole());
+        $rows = app(BuildingChartService::class)->rows(Building::where('name', WorkbookSeeder::buildingName($scope))->sole());
         $mismatches = [];
         $compared = 0;
 

@@ -10,8 +10,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
- * One timeline: a tower, or the project's common (site-wide) work. Each is a peer with its own
- * activities, durations and start dates; common work is never computed from the buildings.
+ * One timeline: a tower, or the project's Common activities (site-wide work, type common_work,
+ * one per project). Each is a peer with its own activities, durations and start dates; common
+ * activities are never computed from the buildings. The common one is shown on the project page,
+ * not as a building: it cannot be renamed, moved or deleted on its own.
  *
  * Start dates are the building's own. A new building takes its project's planned start unless
  * it is given one — the project's date is only that default, and changing it moves nothing.
@@ -47,6 +49,11 @@ class Building extends Model
         ];
     }
 
+    public function isCommon(): bool
+    {
+        return $this->type === BuildingType::CommonWork;
+    }
+
     /**
      * @return BelongsTo<Project, $this>
      */
@@ -61,16 +68,6 @@ class Building extends Model
     public function activities(): HasMany
     {
         return $this->hasMany(Activity::class);
-    }
-
-    /**
-     * Its floors, lowest first. Optional: a building may have none.
-     *
-     * @return HasMany<Floor, $this>
-     */
-    public function floors(): HasMany
-    {
-        return $this->hasMany(Floor::class)->orderBy('level')->orderBy('id');
     }
 
     /**
