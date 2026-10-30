@@ -8,6 +8,7 @@ import ConfirmDialog from '@/Components/ConfirmDialog.vue'
 import TimelineView from '@/Components/TimelineView.vue'
 import AllActivities from '@/Components/AllActivities.vue'
 import { formatDate, signed, percent, leadText } from '@/lib/format'
+import { workIdHint } from '@/lib/projectCode'
 
 /*
  | One project, in tabs, each at its own URL:
@@ -81,7 +82,7 @@ const confirmDelete = () => {
               :class="t.key === tab ? 'bg-teal-700 text-white' : 'text-slate-600 hover:bg-slate-50'"
               :aria-current="t.key === tab ? 'page' : undefined">{{ t.label }}</Link>
       </nav>
-      <span class="text-sm text-slate-500">Code <b class="font-mono text-slate-900" data-test="project-code">{{ project.code }}</b></span>
+      <span class="text-sm text-slate-500" data-test="work-id-prefix" :title="workIdHint(project.code)">Work ID prefix: <b class="font-mono text-slate-900" data-test="project-code">{{ project.code }}</b></span>
       <button class="btn-ghost ml-auto" @click="editingProject = true">Edit project</button>
     </div>
 

@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useForm } from '@inertiajs/vue3'
 import Modal from './Modal.vue'
 import FormField from './FormField.vue'
-import { cleanCode, initials } from '@/lib/projectCode'
+import { cleanCode, editWorkIdHint, initials } from '@/lib/projectCode'
 
 /*
  | The planned start is only the default for new buildings:
@@ -53,8 +53,8 @@ const submit = () => {
         <input v-model="form.name" type="text" maxlength="150" autofocus />
       </FormField>
 
-      <FormField label="Code" :error="form.errors.code"
-                 :hint="isEdit ? 'Starts every Work ID. Changing it keeps the IDs already given.' : 'Starts every Work ID, like SV-001. From the name unless you type one.'">
+      <FormField label="Work ID prefix" :error="form.errors.code"
+                 :hint="isEdit ? editWorkIdHint(project.code) : 'Starts every Work ID, like SV-001. From the name unless you type one.'">
         <input :value="form.code" type="text" maxlength="8" class="font-mono uppercase" autocomplete="off" data-test="project-code" @input="typeCode" />
       </FormField>
 
