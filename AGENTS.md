@@ -8,16 +8,16 @@ decisions: `docs/PLAN_V5.md`.
 
 - **One real user** (the client). No roles, approval, sharing or invites; don't add them.
 - **Owner-only access.** `projects.owner_id`; every query and policy checks it, and another account's project,
-  building, floor or activity is a 404 on every page and API route. A new signed-in route needs an ownership
+  building or activity is a 404 on every page and API route. A new signed-in route needs an ownership
   case in `tests/Feature/OwnershipTest.php`, which fails otherwise.
 - Planned dates are written only by `ScheduleRecalculator`. Building % is the workbook's own figure
-  (`BuildingMetricsService`); floor and project % come from `ProgressService`, in work-days.
+  (`BuildingMetricsService`); project % comes from `ProgressService`, in work-days. There are no floors.
 
 ## Import flow
 
 1. Back up the dev DB (below).
 2. `php artisan timeline:excel-to-json`: workbooks in `CLIENT_WORKBOOKS_DIR` → `storage/app/private/imports/<date>/project.json`
-   (git-ignored), with floor guesses printed for checking.
+   (git-ignored).
 3. `php artisan timeline:import-json <file> --owner=<email> --dry-run`, then without `--dry-run`; `--as=` for
    another project name. Validated by `PlanDocumentValidator`, written by `PlanImporter` in one transaction,
    logged in `plan_imports`. The UI's Excel upload uses the same validator.
@@ -29,6 +29,8 @@ decisions: `docs/PLAN_V5.md`.
 - Never run `migrate:fresh`, `migrate:rollback`, `db:wipe`, `db:seed` or any delete against the dev
   database without asking first.
 - Tests run only against `construction_tracker_test`; `tests/TestCase.php` refuses any other database.
+- `.env.testing` names the dev database: `php artisan … --env=testing` runs against dev. To migrate the test
+  database, set `DB_DATABASE=construction_tracker_test` explicitly.
 - For a browser check, use a throwaway account and project created and removed by a script outside the repo;
   never a real account's password, never the client's project.
 
@@ -36,6 +38,9 @@ decisions: `docs/PLAN_V5.md`.
 
 - The client's workbooks live outside the repository, in `CLIENT_WORKBOOKS_DIR`. Never copy their data
   into code, seeders, tests or committed files. Tests use small hand-made data (`tests/Fixtures`).
+- The one exception: `database/data/shaligram-vrundavan.json`, the import file for the live server (the repo is
+  private). Regenerate it with `timeline:excel-to-json --out=database/data/shaligram-vrundavan.json --force`,
+  never by hand; no other client data in the repo.
 - The Excel oracle, the 151-row import proof and the chart oracle must keep passing.
 
 ## Working on a phase

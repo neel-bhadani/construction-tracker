@@ -8,7 +8,7 @@ namespace App\Data;
 final readonly class PlanImportResult
 {
     /**
-     * @param  list<array{name: string, type: string, floors: int, activities: int, actuals: int, breaks: int, onFloors: int}>  $buildings
+     * @param  list<array{name: string, type: string, activities: int, actuals: int, breaks: int}>  $buildings
      */
     public function __construct(
         public bool $dryRun,

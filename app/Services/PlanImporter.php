@@ -29,7 +29,6 @@ class PlanImporter
     public function __construct(
         private readonly PlanDocumentValidator $validator,
         private readonly ProjectEditor $projects,
-        private readonly FloorEditor $floors,
         private readonly PlanWriter $writer,
         private readonly BuildingMetricsService $metrics,
     ) {}
@@ -100,12 +99,7 @@ class PlanImporter
                 $building->forceFill(['actual_start_date' => $data['actual_start']])->save();
             }
 
-            $floorIds = [];
-            foreach ($data['floors'] as $floor) {
-                $floorIds[mb_strtolower($floor['name'])] = $this->floors->add($building, $floor['name'], $floor['level'], $owner)->id;
-            }
-
-            $this->writer->write($building, $this->rows($data['activities'], $floorIds), $owner, "imported from {$file}");
+            $this->writer->write($building, $this->rows($data['activities']), $owner, "imported from {$file}");
 
             // read back from the database: Excel's planned dates, then the Chart sheet's figures
             $stored = Activity::where('building_id', $building->id)->pluck('planned_date', 'sort_order');
@@ -131,11 +125,9 @@ class PlanImporter
             $buildings[] = [
                 'name' => $data['name'],
                 'type' => $data['type'],
-                'floors' => count($floorIds),
                 'activities' => count($data['activities']),
                 'actuals' => count(array_filter(array_column($data['activities'], 'actual_date'))),
                 'breaks' => count(array_filter(array_column($data['activities'], 'is_break'))),
-                'onFloors' => count(array_filter(array_column($data['activities'], 'floor'))),
             ];
         }
 
@@ -159,10 +151,9 @@ class PlanImporter
      * The activities in the shape PlanWriter writes, keyed by row so "comes after" can find them.
      *
      * @param  list<array<string, mixed>>  $activities
-     * @param  array<string, int>  $floorIds  by lower-case floor name
      * @return array<int, array<string, mixed>>
      */
-    private function rows(array $activities, array $floorIds): array
+    private function rows(array $activities): array
     {
         $rows = [];
         foreach ($activities as $activity) {
@@ -175,7 +166,6 @@ class PlanImporter
                 'is_break' => $activity['is_break'],
                 'sort_order' => $activity['position'],
                 'actual_date' => $activity['actual_date'],
-                'floor_id' => $activity['floor'] === null ? null : $floorIds[mb_strtolower($activity['floor'])],
                 'notes' => $activity['note'] ?? null,
             ];
         }

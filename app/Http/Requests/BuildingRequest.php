@@ -115,7 +115,7 @@ class BuildingRequest extends FormRequest
 
                 // the same checks as `timeline:import-json`: the chain, loops, breaks, every planned date
                 $problems = app(PlanDocumentValidator::class)->building(
-                    PlanDocument::building($this->plan, BuildingType::from($this->input('type')), null, guessFloors: false),
+                    PlanDocument::building($this->plan, BuildingType::from($this->input('type')), null),
                 );
                 if ($problems !== []) {
                     $this->plan = null;

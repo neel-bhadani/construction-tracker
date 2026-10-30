@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Enums\BuildingType;
 use App\Import\ChartSheet;
 use App\Import\PlanDocument;
 use App\Import\PlanDocumentValidator;
@@ -14,8 +13,8 @@ use UnexpectedValueException;
 /**
  * Step 1 of the import: the client's workbooks to one JSON file, by default outside the repository
  * (storage/app/private is git-ignored). The one exception is the live server's import file,
- * --out=database/data/shaligram-vrundavan.json, which is committed. Read the floor guesses it prints,
- * correct them in the JSON if needed, then run step 2, `timeline:import-json`.
+ * --out=database/data/shaligram-vrundavan.json, which is committed. Then run step 2,
+ * `timeline:import-json`.
  *
  * Everything is parsed from the formulas, never evaluated: planned dates and the `expected` figures
  * are Excel's own cached results, so step 2 can check its recalculation against them.
@@ -60,9 +59,7 @@ class ExcelToJson extends Command
                 return self::FAILURE;
             }
 
-            $type = ScheduleWorkbook::TYPES[$scope];
-            // common work is the whole site's: no floors are guessed for it
-            $buildings[] = PlanDocument::building($workbook, $type, $chart['actualStartDate'], guessFloors: $type === BuildingType::Building);
+            $buildings[] = PlanDocument::building($workbook, ScheduleWorkbook::TYPES[$scope], $chart['actualStartDate']);
             $expected[$scope] = PlanDocument::expected($chart);
         }
 
@@ -71,8 +68,6 @@ class ExcelToJson extends Command
             'buildings' => $buildings,
             'expected' => $expected,
         ];
-
-        $this->floorTable($buildings);
 
         $problems = $validator->validate($document);
         if ($problems !== []) {
@@ -91,39 +86,12 @@ class ExcelToJson extends Command
 
         $this->newLine();
         $this->info("Wrote [{$out}].");
-        $this->line(sprintf('%d buildings, %d activities, %d floors; every planned date checked against Excel.',
+        $this->line(sprintf('%d buildings, %d activities; every planned date checked against Excel. Next:',
             count($buildings),
             array_sum(array_map(fn (array $b) => count($b['activities']), $buildings)),
-            array_sum(array_map(fn (array $b) => count($b['floors']), $buildings)),
         ));
-        $this->line('Correct any floor in the JSON (the activity\'s "floor", and the building\'s "floors" list), then:');
         $this->line("  php artisan timeline:import-json {$out} --owner=you@example.com --dry-run");
 
         return self::SUCCESS;
-    }
-
-    /**
-     * Every guess, building by building, so they can be checked before step 2.
-     *
-     * @param  list<array<string, mixed>>  $buildings
-     */
-    private function floorTable(array $buildings): void
-    {
-        foreach ($buildings as $building) {
-            $this->newLine();
-            $this->line("<options=bold>{$building['name']}</> ({$building['type']}): floors guessed from names");
-
-            if ($building['type'] !== BuildingType::Building->value) {
-                $this->line('  Common work: every activity is Whole building.');
-
-                continue;
-            }
-
-            $this->table(['Row', 'Activity', 'Floor'], array_map(fn (array $a) => [
-                $a['row'],
-                $a['name'],
-                $a['is_break'] ? 'Whole building (break)' : ($a['floor'] ?? 'Whole building'),
-            ], $building['activities']));
-        }
     }
 }

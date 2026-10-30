@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { Link, router, usePage } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import StatusChip from '@/Components/StatusChip.vue'
@@ -8,13 +8,8 @@ import RecordActualModal from '@/Components/RecordActualModal.vue'
 import ActivityFormModal from '@/Components/ActivityFormModal.vue'
 import ConfirmDialog from '@/Components/ConfirmDialog.vue'
 import RowMenu from '@/Components/RowMenu.vue'
-import FloorsSection from '@/Components/FloorsSection.vue'
-import FloorChips from '@/Components/FloorChips.vue'
-import FloorFormModal from '@/Components/FloorFormModal.vue'
-import MoveToFloorModal from '@/Components/MoveToFloorModal.vue'
 import BuildingDatesModal from '@/Components/BuildingDatesModal.vue'
 import { formatDate, signed, percent, leadWord } from '@/lib/format'
-import { activityFloorKey, shortFloorName } from '@/lib/floors'
 
 /*
  | One building's timeline. Every figure is the server's — BuildingMetricsService and
@@ -31,7 +26,6 @@ const props = defineProps({
   projection: Object,
   chart: Object,
   activities: Array,
-  floors: Array,          // ProgressService floor rows, "Whole building" last; empty without floors
   today: String,
 })
 
@@ -46,37 +40,14 @@ const rows = computed(() => {
   return props.metrics.activities.map(m => ({ ...m, ...projected[m.id], ...stored[m.id] }))
 })
 
-/* ---------------- floors ---------------- */
-
-const hasFloors = computed(() => props.floors.length > 0)
-const buildingFloors = computed(() => props.floors.filter(f => f.id !== null))
-const floorNames = computed(() => Object.fromEntries(buildingFloors.value.map(f => [f.id, f.name])))
-
-// 'all', 'whole' or a floor id; the Floors section and the chips set the same filter
-const floorFilter = ref('all')
-watch(hasFloors, has => { if (!has) floorFilter.value = 'all' })
-// a deleted floor's filter falls back to everything
-watch(buildingFloors, floors => {
-  if (typeof floorFilter.value === 'number' && !floors.some(f => f.id === floorFilter.value)) floorFilter.value = 'all'
-})
-
-const floorRows = computed(() => floorFilter.value === 'all'
-  ? rows.value
-  : rows.value.filter(row => activityFloorKey(row) === floorFilter.value))
-
 const statusFilter = ref('all')
 const statusChips = computed(() => [
-  { key: 'all', label: 'All', count: floorRows.value.length },
-  { key: 'pending', label: 'Pending', count: floorRows.value.filter(row => row.status !== 'Done').length },
-  { key: 'done', label: 'Done', count: floorRows.value.filter(row => row.status === 'Done').length },
+  { key: 'all', label: 'All', count: rows.value.length },
+  { key: 'pending', label: 'Pending', count: rows.value.filter(row => row.status !== 'Done').length },
+  { key: 'done', label: 'Done', count: rows.value.filter(row => row.status === 'Done').length },
 ])
-const shownRows = computed(() => floorRows.value.filter(row => statusFilter.value === 'all'
+const shownRows = computed(() => rows.value.filter(row => statusFilter.value === 'all'
   || (statusFilter.value === 'done' ? row.status === 'Done' : row.status !== 'Done')))
-
-// a new activity goes on the floor being looked at
-const newFloorId = computed(() => (typeof floorFilter.value === 'number' ? floorFilter.value : null))
-
-const floorTag = row => (row.floor_id ? shortFloorName(floorNames.value[row.floor_id] ?? '') : 'Whole building')
 
 const earliestActual = computed(() => props.metrics.actualStartDate)
 
@@ -89,12 +60,10 @@ const leadTone = computed(() => lead.value === null ? 'text-slate-900' : lead.va
 const recording = ref(null)
 const editing = ref(null)        // a row, or {} for a new activity at the end
 const inserting = ref(null)      // the row a new activity goes below
-const moving = ref(null)         // the row whose floor is being changed
 const deleting = ref(null)
 const deleteError = ref('')
 const deleteProcessing = ref(false)
 const showBuildingDates = ref(false)
-const addingFloors = ref(false)
 
 const confirmDelete = () => {
   deleteProcessing.value = true
@@ -118,8 +87,6 @@ const menuItems = row => [
   ...(!row.is_break ? [{ label: row.actualDate ? 'Change actual date' : 'Mark done', action: () => { recording.value = row } }] : []),
   { label: 'Edit', action: () => { editing.value = row } },
   { label: 'Insert activity below', action: () => { inserting.value = row } },
-  // a break is on no floor
-  ...(hasFloors.value && !row.is_break ? [{ label: 'Move to floor…', action: () => { moving.value = row } }] : []),
   { label: 'Delete', action: () => openDelete(row), danger: true },
 ]
 </script>
@@ -186,9 +153,6 @@ const menuItems = row => [
 
     <ProgressChart :chart="chart" />
 
-    <FloorsSection :floors="floors" :project-id="project.id" :building-id="building.id"
-                   :active="floorFilter" @select="key => (floorFilter = key)" />
-
     <h2 class="mb-3 text-xl font-semibold text-slate-900">Activities</h2>
     <div class="mb-3 flex flex-wrap items-center gap-3">
       <div class="flex gap-1 rounded-lg border border-slate-200 bg-white p-1" role="group" aria-label="Activity status">
@@ -199,10 +163,7 @@ const menuItems = row => [
           {{ chip.label }} <span class="ml-1 tabular-nums" :class="statusFilter === chip.key ? 'text-teal-100' : 'text-slate-400'">{{ chip.count }}</span>
         </button>
       </div>
-      <button v-if="building.type !== 'common_work'" type="button" class="ml-auto min-h-11 text-sm font-semibold text-teal-700 hover:underline"
-              @click="addingFloors = true">+ Add floors</button>
     </div>
-    <FloorChips v-if="hasFloors" v-model="floorFilter" :floors="floors" :rows="rows" />
 
     <!-- desktop: the table -->
     <div class="card hidden lg:block">
@@ -234,8 +195,6 @@ const menuItems = row => [
                   <div class="min-w-0">
                     <button type="button" class="break-words text-left font-medium hover:text-teal-700 hover:underline"
                             :class="row.is_break ? '' : 'text-slate-900'" @click="editing = row">{{ row.description }}</button>
-                    <span v-if="hasFloors && !row.is_break" data-test="floor-tag" class="ml-2 whitespace-nowrap rounded px-1.5 py-0.5 text-sm font-medium"
-                          :class="row.floor_id ? 'bg-sky-50 text-sky-800' : 'text-slate-400'">{{ floorTag(row) }}</span>
                   </div>
                   <button v-if="row.status === 'NEXT' && !row.is_break" class="btn shrink-0 !px-3" @click="recording = row">Mark done</button>
                 </div>
@@ -278,8 +237,6 @@ const menuItems = row => [
           <div class="min-w-0 flex-1">
             <button type="button" class="break-words text-left font-semibold hover:text-teal-700 hover:underline"
                     :class="row.is_break ? '' : 'text-slate-900'" @click="editing = row">{{ row.description }}</button>
-            <span v-if="hasFloors && !row.is_break" class="mt-1 block w-fit rounded px-1.5 py-0.5 text-sm font-medium not-italic"
-                  :class="row.floor_id ? 'bg-sky-50 text-sky-800' : 'text-slate-400'">{{ floorTag(row) }}</span>
           </div>
           <RowMenu :items="menuItems(row)" :label="`More for ${row.description}`" button-class="btn-ghost !px-3 !text-lg not-italic" />
         </div>
@@ -314,10 +271,7 @@ const menuItems = row => [
                        @close="recording = null" />
     <ActivityFormModal :show="!!editing || !!inserting" :building="building" :activity="editing?.id ? editing : null"
                        :insert-after="inserting" :rows="rows" :today="today" :earliest="earliestActual"
-                       :floors="buildingFloors" :floor-id="newFloorId" @close="closeForm" />
-    <MoveToFloorModal :show="!!moving" :activity="moving" :floors="buildingFloors" @close="moving = null" />
-    <FloorFormModal :show="addingFloors" :project-id="project.id" :building-id="building.id"
-                    :existing="buildingFloors" @close="addingFloors = false" />
+                       @close="closeForm" />
     <ConfirmDialog :show="!!deleting" title="Delete activity" confirm-text="Delete"
                    :processing="deleteProcessing"
                    :message="deleteError || (deleting ? `Delete [${deleting.description}]? Its history is kept in the audit trail.` : '')"

@@ -10,7 +10,6 @@ const sections = [
   { id: 'dates', title: 'Planned date and actual date' },
   { id: 'insert', title: 'Insert an activity between two others' },
   { id: 'breaks', title: 'Breaks' },
-  { id: 'floors', title: 'Floors' },
   { id: 'chart', title: 'The chart lines' },
   { id: 'profile', title: 'My profile' },
 ]
@@ -69,24 +68,8 @@ const sections = [
         <section id="breaks" class="card p-5 sm:p-6">
           <h2>Breaks</h2>
           <p>Tick <b>This is a break</b> for Diwali, Holi or another festival. A break pushes the dates after it like any
-            other activity, but it is never “done”: it has no actual date and is on no floor.</p>
+            other activity, but it is never “done”: it has no actual date.</p>
           <p class="example"><b>Example:</b> “Diwali break, 20 days” after “1st SLAB”: the 2nd slab's planned date moves 20 days later.</p>
-        </section>
-
-        <section id="floors" class="card p-5 sm:p-6">
-          <h2>Floors</h2>
-          <p>Floors are optional. On a building page, press <b>+ Add floors</b>: add one floor by name, or the quick
-            “Ground + 1 to 13”, which shows which floors it will add before you save. Then choose the floor in an
-            activity's dialog, or use <b>Move to floor</b> in a row's ⋯ menu. Activities on no floor are
-            <b>Whole building</b> (masonry, handover…).</p>
-          <p>The <b>Floors</b> section shows each floor's progress, how many activities are done, and when it should and will
-            finish. Click a floor, or one of the chips above the list, to see only its activities; click again to see
-            all. Deleting a floor moves its activities to Whole building; no dates change.</p>
-          <p class="example"><b>Example:</b> “1st floor: 1 of 2 done, Behind” means one of its activities is done and another
-            is past its planned date without an actual date.</p>
-          <p><b>Why the floor percentages don't add up to the building's:</b> the building's % is how far along its plan the
-            work has got, while a floor's % adds up only that floor's own work, and breaks and whole-building work
-            belong to no floor.</p>
         </section>
 
         <section id="chart" class="card p-5 sm:p-6">

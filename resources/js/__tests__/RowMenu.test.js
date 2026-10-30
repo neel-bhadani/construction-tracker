@@ -9,7 +9,7 @@ describe('RowMenu', () => {
   it('fits the expanded activity menu above a low row and restores focus on Escape', async () => {
     vi.stubGlobal('innerHeight', 768)
     wrapper = mount(RowMenu, {
-      props: { items: ['Mark done', 'Edit', 'Insert activity below', 'Move to floor…', 'Delete'].map(label => ({ label, action: vi.fn() })) },
+      props: { items: ['Mark done', 'Edit', 'Insert activity below', 'Delete'].map(label => ({ label, action: vi.fn() })) },
       attachTo: document.body,
       global: { stubs: { teleport: true } },
     })

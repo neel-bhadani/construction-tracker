@@ -2,11 +2,9 @@
 
 namespace Tests\Feature;
 
-use App\Import\PlanDocument;
 use App\Import\PlanDocumentValidator;
 use App\Models\Activity;
 use App\Models\Building;
-use App\Models\Floor;
 use App\Models\PlanImport;
 use App\Models\Project;
 use App\Models\User;
@@ -58,21 +56,18 @@ class ImportJsonTest extends TestCase
             [$project->name, $project->owner_id, $project->planned_start_date->toDateString(), $project->timezone]);
 
         $tower = Building::where('name', 'Tower 1')->sole();
-        $this->assertSame([['Ground floor', 0], ['1st floor', 1], ['2nd floor', 2]],
-            Floor::where('building_id', $tower->id)->orderBy('level')->get()->map(fn (Floor $f) => [$f->name, $f->level])->all());
-
-        $rows = Activity::where('building_id', $tower->id)->with('floor', 'predecessor')->orderBy('sort_order')->get();
+        $rows = Activity::where('building_id', $tower->id)->with('predecessor')->orderBy('sort_order')->get();
         $this->assertSame([
-            ['Excavation', null, null, 10, '2026-01-11', '2026-01-10'],
-            ['GF SLAB', 'Ground floor', 'Excavation', 30, '2026-01-31', '2026-01-29'],
-            ['GF walls', 'Ground floor', 'GF SLAB', 40, '2026-02-10', '2026-02-12'],
-            ['1st SLAB', '1st floor', 'GF SLAB', 45, '2026-02-15', null],
-            ['DIWALI BREAK 10', null, '1st SLAB', 55, '2026-02-28', null],
-            ['1F walls', '1st floor', 'DIWALI BREAK 10', 65, '2026-03-07', null],
-            ['2nd SLAB 5', '2nd floor', 'DIWALI BREAK 10', 60, '2026-03-02', null],
-            ['Handover', null, '1F walls', 70, '2026-03-12', null],
+            ['Excavation', null, 10, '2026-01-11', '2026-01-10'],
+            ['GF SLAB', 'Excavation', 30, '2026-01-31', '2026-01-29'],
+            ['GF walls', 'GF SLAB', 40, '2026-02-10', '2026-02-12'],
+            ['1st SLAB', 'GF SLAB', 45, '2026-02-15', null],
+            ['DIWALI BREAK 10', '1st SLAB', 55, '2026-02-28', null],
+            ['1F walls', 'DIWALI BREAK 10', 65, '2026-03-07', null],
+            ['2nd SLAB 5', 'DIWALI BREAK 10', 60, '2026-03-02', null],
+            ['Handover', '1F walls', 70, '2026-03-12', null],
         ], $rows->map(fn (Activity $a) => [
-            $a->description, $a->floor?->name, $a->predecessor?->description, $a->planned_day, $a->planned_date->toDateString(), $a->actual_date?->toDateString(),
+            $a->description, $a->predecessor?->description, $a->planned_day, $a->planned_date->toDateString(), $a->actual_date?->toDateString(),
         ])->all());
 
         $diwali = $rows->firstWhere('description', 'DIWALI BREAK 10');
@@ -177,14 +172,6 @@ class ImportJsonTest extends TestCase
             $check(function (&$d) {
                 $d['buildings'][0]['activities'][4]['actual_date'] = '2026-02-20';
             }));
-        $this->assertContains('Tower 1 row 8 [DIWALI BREAK 10]: a break is on no floor.',
-            $check(function (&$d) {
-                $d['buildings'][0]['activities'][4]['floor'] = '1st floor';
-            }));
-        $this->assertContains('Tower 1 row 4 [Excavation]: is on [Roof], which is not in this building\'s floors.',
-            $check(function (&$d) {
-                $d['buildings'][0]['activities'][0]['floor'] = 'Roof';
-            }));
         $this->assertContains('Tower 1 row 4 [Excavation]: the actual date 2025-12-31 is before the building\'s start (2026-01-01).',
             $check(function (&$d) {
                 $d['buildings'][0]['activities'][0]['actual_date'] = '2025-12-31';
@@ -221,18 +208,6 @@ class ImportJsonTest extends TestCase
         $this->assertImportFails($document, 'Predecessor cycle');
     }
 
-    public function test_floors_are_guessed_from_names(): void
-    {
-        $this->assertSame(
-            [0, 0, 0, 0, 0, 1, 2, 12, 13, null, null, null, null, null],
-            array_map(PlanDocument::guessLevel(...), [
-                'DAY 1 TO GF SLAB - 180 DAYS', 'GF SLAB', 'Ground floor slab', 'GROUND FLOOR WATERPROOFING', 'Ground floor tiling 10',
-                '1st SLAB', '2nd SLAB 20', '12th SLAB 15', '13TH SLAB',
-                'TERRACE-1 20', 'MASONRY 30', 'DIWALI (08-11-2026) BREAK 20', 'GROUND LEVEL PLASTER 20', 'GROUNDFLOOR',
-            ]),
-        );
-    }
-
     private function assertImportFails(array $document, string $message): void
     {
         $file = tempnam(sys_get_temp_dir(), 'plan').'.json';
@@ -260,7 +235,7 @@ class ImportJsonTest extends TestCase
      */
     private function counts(): array
     {
-        $tables = ['projects', 'buildings', 'floors', 'activities', 'activity_revisions', 'building_revisions', 'project_revisions', 'plan_imports'];
+        $tables = ['projects', 'buildings', 'activities', 'activity_revisions', 'building_revisions', 'project_revisions', 'plan_imports'];
 
         return array_combine($tables, array_map(fn (string $t) => DB::table($t)->count(), $tables));
     }

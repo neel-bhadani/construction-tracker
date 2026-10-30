@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Exceptions\ActivityHasDependantsException;
 use App\Http\Requests\ActivityPreviewRequest;
 use App\Http\Requests\ActivityRequest;
-use App\Http\Requests\MoveToFloorRequest;
 use App\Http\Requests\RecordActualRequest;
 use App\Models\Activity;
 use App\Models\Building;
@@ -49,13 +48,6 @@ class ActivityController extends Controller
         return back()->with('success', $activity->actual_date
             ? "Recorded [{$activity->description}] on {$activity->actual_date->format('j M Y')}."
             : "Cleared the actual date of [{$activity->description}].");
-    }
-
-    public function moveToFloor(MoveToFloorRequest $request, Activity $activity): RedirectResponse
-    {
-        $activity = $this->editor->moveToFloor($activity, $request->filled('floor_id') ? $request->integer('floor_id') : null, $request->user());
-
-        return back()->with('success', "Moved [{$activity->description}] to ".($activity->floor?->name ?? 'Whole building').'.');
     }
 
     public function destroy(Request $request, Activity $activity): RedirectResponse

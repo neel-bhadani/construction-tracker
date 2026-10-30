@@ -67,8 +67,8 @@ class ImportJson extends Command
         $this->newLine();
         $this->line("Project [{$result->projectName}] for [{$owner->email}]");
         $this->table(
-            ['Building', 'Type', 'Floors', 'Activities', 'On a floor', 'Breaks', 'Actual dates'],
-            array_map(fn (array $b) => [$b['name'], $b['type'], $b['floors'], $b['activities'], $b['onFloors'], $b['breaks'], $b['actuals']], $result->buildings),
+            ['Building', 'Type', 'Activities', 'Breaks', 'Actual dates'],
+            array_map(fn (array $b) => [$b['name'], $b['type'], $b['activities'], $b['breaks'], $b['actuals']], $result->buildings),
         );
         $this->line("Planned dates equal to the file (Excel): {$result->datesChecked} of {$result->datesChecked}");
         $this->line("Figures equal to `expected` (%, lead, finish, forecasts): {$result->figuresChecked} of {$result->figuresChecked}");

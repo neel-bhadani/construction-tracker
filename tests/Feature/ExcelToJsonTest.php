@@ -43,11 +43,13 @@ class ExcelToJsonTest extends TestCase
         $document = json_decode(file_get_contents($this->out), true);
         $this->assertSame(['Tower A', 'Tower B', 'Overall Timeline'], array_column($document['buildings'], 'name'));
         $this->assertSame(['building', 'building', 'common_work'], array_column($document['buildings'], 'type'));
-        // common work has no floors; each tower has the ground floor and the slabs it names
-        $this->assertSame([], $document['buildings'][2]['floors']);
-        $this->assertSame('Ground floor', $document['buildings'][0]['floors'][0]['name']);
-        $this->assertSame('Ground floor', $document['buildings'][0]['activities'][0]['floor']);
-        $this->assertNull(collect($document['buildings'][0]['activities'])->firstWhere('is_break', true)['floor']);
+        // no floors anywhere in the document
+        foreach ($document['buildings'] as $building) {
+            $this->assertArrayNotHasKey('floors', $building);
+            foreach ($building['activities'] as $activity) {
+                $this->assertArrayNotHasKey('floor', $activity);
+            }
+        }
 
         $this->artisan('timeline:import-json', ['file' => $this->out, '--owner' => $this->owner()->email, '--dry-run' => true])
             ->expectsOutputToContain('Planned dates equal to the file (Excel): 151 of 151')

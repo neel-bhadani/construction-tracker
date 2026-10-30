@@ -19,7 +19,7 @@ class PlanWriter
     public function __construct(private readonly ScheduleRecalculator $recalculator) {}
 
     /**
-     * @param  array<int|string, array{description: string, predecessor: int|string|null, offset_days: int, date_adjustment_days: int, adjustment_reason: ?string, is_break: bool, sort_order: int, actual_date?: ?string, floor_id?: ?int, notes?: ?string}>  $rows  keyed by any id the predecessor keys refer to; floor_id is a floor of $building
+     * @param  array<int|string, array{description: string, predecessor: int|string|null, offset_days: int, date_adjustment_days: int, adjustment_reason: ?string, is_break: bool, sort_order: int, actual_date?: ?string, notes?: ?string}>  $rows  keyed by any id the predecessor keys refer to
      * @param  ?User  $user  the person creating it; each activity then gets a `created` revision naming $origin
      * @return array<int|string, int> new activity id for each row key
      */
@@ -31,7 +31,6 @@ class PlanWriter
             foreach ($rows as $key => $row) {
                 $ids[$key] = DB::table('activities')->insertGetId([
                     'building_id' => $building->id,
-                    'floor_id' => $row['floor_id'] ?? null,
                     'description' => $row['description'],
                     'offset_days' => $row['offset_days'],
                     'date_adjustment_days' => $row['date_adjustment_days'],
