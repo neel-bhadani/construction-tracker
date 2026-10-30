@@ -57,6 +57,12 @@ describe('project page', () => {
     expect(tabs[1].attributes('href')).toBe('/projects/7/common')
   })
 
+  it('names each card\'s next activity, or All done when none is left', () => {
+    const w = render({ tab: 'buildings', project: { ...project, buildings: [card(1, 'Tower A'), card(2, 'Tower B', { next: null })] } })
+    const next = w.findAll('[data-test="building-card"]').map(c => c.findAll('dd')[1].text())
+    expect(next).toEqual(['Slab', 'All done'])
+  })
+
   it('shows the common activities as a timeline in their own tab, with Work IDs', () => {
     const w = render({ tab: 'common', timeline })
     expect(w.findAll('[data-test="building-card"]')).toHaveLength(0)

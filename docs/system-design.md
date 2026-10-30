@@ -147,8 +147,13 @@ time. Reproduced, not reconciled.
 ### Lead tracker
 
 Status per activity is three-valued: **Done** (has an actual date), **NEXT** (the first row without one in
-**row order** — `COUNTBLANK(E$4:E_row)=1`, not date order), **Pending** (the rest, including a blank row that sits
-after a later completed row). The tracker applies the current lead to every pending activity; a completed
+**row order** that is not a break — not date order), **Pending** (the rest, including a blank row that sits
+after a later completed row, and every break without a date). Excel's `COUNTBLANK(E$4:E_row)=1` has no break
+test, so once the rows before a break are done Excel names the break NEXT; a break can never be marked done, so
+the app skips it. This is the one deliberate departure from the Lead Tracker: when Excel's NEXT row is a break,
+the oracle test (`WorkbookMetricsTest`) expects that break as Pending and NEXT on the first non-break blank row
+after it, and compares every other status cell unchanged. The project page's card, the timeline and All
+activities all read this status; a building with no NEXT shows "All done". The tracker applies the current lead to every pending activity; a completed
 activity keeps its own achieved lead. A what-if lead replaces the current lead only when one is supplied: blank
 means use the current lead, and 0 is a lead like any other. The quick-comparison table (−5, 0, 5, 7, 9, 12 days)
 is `planned finish − lead` repeated.

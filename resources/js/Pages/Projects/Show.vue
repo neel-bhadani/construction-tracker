@@ -157,7 +157,7 @@ const confirmDelete = () => {
             <dt class="text-slate-500">Lead</dt>
             <dd class="font-semibold" :class="leadTone(b.currentLead)">{{ leadText(b.currentLead) }}</dd>
             <dt class="text-slate-500">Next</dt>
-            <dd class="truncate text-slate-900" :title="b.next">{{ b.next ?? '—' }}</dd>
+            <dd class="truncate text-slate-900" :title="b.next">{{ b.next ?? (b.activitiesCount ? 'All done' : '—') }}</dd>
             <dt class="text-slate-500">Forecast finish</dt>
             <dd class="font-semibold text-slate-900">{{ formatDate(b.expectedHandover) }}</dd>
           </dl>

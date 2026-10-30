@@ -10,6 +10,7 @@ final readonly class ActivityMetrics
     public function __construct(
         public int $id,
         public string $description,
+        public bool $isBreak,
         public int $plannedDay,
         public string $plannedDate,
         public ?string $actualDate,

@@ -83,7 +83,7 @@ class WorkbookMetricsTest extends TestCase
         $this->compare($mismatches, 'Lead comparison', $oracle->comparison, $projection->comparison);
 
         $this->assertCount(count($oracle->leadRows), $projection->activities);
-        foreach ($oracle->leadRows as $index => $expectedRow) {
+        foreach ($this->skipBreakForNext($oracle->leadRows, $this->metrics($scope)->activities) as $index => $expectedRow) {
             $row = $projection->activities[$index];
             foreach (array_diff_key($expectedRow, ['row' => true]) as $field => $expected) {
                 $actual = $field === 'status' ? $row->status->value : $row->{$field};
@@ -107,6 +107,34 @@ class WorkbookMetricsTest extends TestCase
         $this->assertSame(1.0, $gap('1st SLAB'));
         $this->assertSame(20.0, $gap('DIWALI (08-11-2026) BREAK 20'));
         $this->assertSame(4.0, $gap('2nd SLAB 20'));
+    }
+
+    /**
+     * The one deliberate departure from the Lead Tracker's status column: Excel's
+     * COUNTBLANK(E$4:E_row)=1 has no break test, so it can name a break NEXT, which can never be
+     * marked done. Only when Excel's NEXT row is a break, expect that break Pending and NEXT on the
+     * first non-break blank row after it; every other status is Excel's own.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     * @param  list<\App\Data\ActivityMetrics>  $activities  in the same order
+     * @return list<array<string, mixed>>
+     */
+    private function skipBreakForNext(array $rows, array $activities): array
+    {
+        $next = array_search('NEXT', array_column($rows, 'status'), true);
+        if ($next === false || ! $activities[$next]->isBreak) {
+            return $rows;
+        }
+
+        $rows[$next]['status'] = 'Pending';
+        for ($index = $next + 1; $index < count($rows); $index++) {
+            if ($activities[$index]->actualDate === null && ! $activities[$index]->isBreak) {
+                $rows[$index]['status'] = 'NEXT';
+                break;
+            }
+        }
+
+        return $rows;
     }
 
     private function metrics(string $scope): BuildingMetrics

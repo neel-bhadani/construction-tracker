@@ -121,6 +121,7 @@ class BuildingMetricsService
         return new ActivityMetrics(
             id: $row->activity->id,
             description: $row->activity->description,
+            isBreak: $row->activity->is_break,
             plannedDay: $row->day,
             plannedDate: ScheduleDays::toDate($row->date),
             actualDate: $this->date($row->actual),

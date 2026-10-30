@@ -45,8 +45,10 @@ class LeadProjectionService
     }
 
     /**
-     * NEXT is the first row without an actual date in row order: COUNTBLANK(E$4:E_row)=1. A blank
-     * row after it is Pending, even when a later row has been completed.
+     * NEXT is the first row without an actual date in row order that is not a break. Excel's
+     * COUNTBLANK(E$4:E_row)=1 would give it to a break, which can never be marked done; a break
+     * without a date is Pending. A blank row after NEXT is Pending, even when a later row has been
+     * completed.
      *
      * @param  list<ActivityMetrics>  $activities
      * @return list<ActivityProjection>
@@ -58,7 +60,7 @@ class LeadProjectionService
         return array_map(function (ActivityMetrics $activity) use ($appliedLead, &$nextFound) {
             if ($activity->actualDate !== null) {
                 $status = ActivityStatus::Done;
-            } elseif (! $nextFound) {
+            } elseif (! $nextFound && ! $activity->isBreak) {
                 $status = ActivityStatus::Next;
                 $nextFound = true;
             } else {

@@ -68,6 +68,7 @@ const sections = [
           <p>The <b>actual date</b> is when it really was done. Leave it empty until then. It can't be in the future or
             before the building's actual start. Choose <b>Mark done</b> or <b>Change actual date</b> in the row's <b>⋯</b> menu.
             The <b>NEXT</b> row also has a visible <b>Mark done</b> button.</p>
+          <p>Breaks are skipped when choosing the next activity.</p>
           <p>An activity with sub-activities has no <b>Mark done</b> of its own: it is done through them (see below).</p>
           <p><b>Ahead / behind</b> is planned minus actual: +3 means it finished 3 days early, −2 means 2 days late.</p>
           <p class="example"><b>Example:</b> “3rd SLAB” is planned for 15 Feb and was finished on 12 Feb: it shows +3.</p>
