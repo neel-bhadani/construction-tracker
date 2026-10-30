@@ -153,3 +153,14 @@ describe('the title', () => {
     expect((await open({})).find('h3').text()).toBe('Add activity')
   })
 })
+
+describe('with sub-activities', () => {
+  it('shows the actual date as theirs, sends none, and cannot become a break', async () => {
+    const withSubs = { ...rows[1], actualDate: '2026-02-01', sub_activities: [{ id: 1 }, { id: 2 }] }
+    const w = await open({ activity: withSubs })
+
+    expect(w.find('[data-test="done-through-subs"]').text()).toContain('Done through its 2 sub-activities: 1 Feb 2026.')
+    expect(w.findAll('input[type="date"]').some(i => i.attributes('max') === '2026-03-01')).toBe(false)
+    expect(w.find('input[type="checkbox"]').attributes('disabled')).toBeDefined()
+  })
+})

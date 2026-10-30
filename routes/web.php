@@ -5,6 +5,7 @@ use App\Http\Controllers\BuildingController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\SubActivityController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -59,6 +60,12 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
     Route::delete('activities/{activity}', [ActivityController::class, 'destroy'])->name('activities.destroy');
     Route::post('buildings/{building}/activities/preview', [ActivityController::class, 'previewNew'])->name('activities.preview-new');
     Route::post('activities/{activity}/preview', [ActivityController::class, 'previewEdit'])->name('activities.preview-edit');
+
+    // the steps inside an activity; they set its actual date once all are done
+    Route::post('activities/{activity}/sub-activities', [SubActivityController::class, 'store'])->name('sub-activities.store');
+    Route::patch('activities/{activity}/sub-activities/order', [SubActivityController::class, 'order'])->name('sub-activities.order');
+    Route::patch('sub-activities/{subActivity}', [SubActivityController::class, 'update'])->name('sub-activities.update');
+    Route::delete('sub-activities/{subActivity}', [SubActivityController::class, 'destroy'])->name('sub-activities.destroy');
 });
 
 require __DIR__.'/auth.php';

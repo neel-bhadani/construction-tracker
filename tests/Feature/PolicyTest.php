@@ -5,10 +5,12 @@ namespace Tests\Feature;
 use App\Models\Activity;
 use App\Models\Building;
 use App\Models\Project;
+use App\Models\SubActivity;
 use App\Models\User;
 use App\Policies\ActivityPolicy;
 use App\Policies\BuildingPolicy;
 use App\Policies\ProjectPolicy;
+use App\Policies\SubActivityPolicy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -27,6 +29,7 @@ class PolicyTest extends TestCase
         'activity.view', 'activity.recordActual', 'activity.create', 'activity.update', 'activity.delete',
         'project.viewAny', 'project.view', 'project.create', 'project.update', 'project.delete',
         'building.view', 'building.create', 'building.update', 'building.rename', 'building.move', 'building.delete', 'building.updateDates',
+        'subActivity.update', 'subActivity.delete',
     ];
 
     /** Not about one project: any account may list its own and make a new one. */
@@ -73,6 +76,7 @@ class PolicyTest extends TestCase
         $this->assertEqualsCanonicalizing($methods(ActivityPolicy::class), $covered('activity'));
         $this->assertEqualsCanonicalizing($methods(ProjectPolicy::class), $covered('project'));
         $this->assertEqualsCanonicalizing($methods(BuildingPolicy::class), $covered('building'));
+        $this->assertEqualsCanonicalizing($methods(SubActivityPolicy::class), $covered('subActivity'));
     }
 
     /**
@@ -88,6 +92,7 @@ class PolicyTest extends TestCase
                 'project' => $this->project(),
                 'building' => $this->building(),
                 'activity' => $this->activity(),
+                'subActivity' => $this->subActivity(),
             },
         };
     }
@@ -100,6 +105,13 @@ class PolicyTest extends TestCase
     private function building(): Building
     {
         return Building::firstOrCreate(['project_id' => $this->project()->id, 'name' => 'Tower A']);
+    }
+
+    private function subActivity(): SubActivity
+    {
+        return SubActivity::findOrFail(DB::table('sub_activities')->insertGetId([
+            'activity_id' => $this->activity()->id, 'work_number' => 1, 'work_id' => 'T-1.1', 'position' => 1, 'name' => 'Step',
+        ]));
     }
 
     private function activity(): Activity

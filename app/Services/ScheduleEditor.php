@@ -9,6 +9,7 @@ use App\Models\Activity;
 use App\Models\ActivityRevision;
 use App\Models\Building;
 use App\Models\BuildingRevision;
+use App\Models\SubActivityRevision;
 use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
@@ -213,8 +214,13 @@ class ScheduleEditor
                 throw new ActivityHasDependantsException($activity->description, $dependants);
             }
 
-            // written first, so the foreign key nulls it with the rest of the trail
+            // written first, so the foreign key nulls it with the rest of the trail; its
+            // sub-activities' rows go with it, their trail stays
             $this->revision($activity, $user, 'deleted', $activity->description, null);
+            foreach ($activity->subActivities()->get(['id', 'name']) as $sub) {
+                SubActivityRevision::create(['sub_activity_id' => $sub->id, 'sub_activity_snapshot_id' => $sub->id,
+                    'user_id' => $user->id, 'field' => 'deleted', 'old_value' => $sub->name]);
+            }
             $building = $activity->building;
             $activity->delete();
 

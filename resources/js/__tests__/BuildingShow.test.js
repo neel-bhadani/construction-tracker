@@ -32,7 +32,7 @@ const render = (props = {}) => {
     },
     global: { stubs: {
       AppLayout: { template: '<main><slot name="breadcrumb" /><slot /></main>' },
-      ProgressChart: true, ActivityFormModal: true, RecordActualModal: true,
+      ProgressChart: true, ActivityFormModal: true, RecordActualModal: true, SubActivityFormModal: true,
       BuildingDatesModal: true, ConfirmDialog: true,
       teleport: true,
     } },
@@ -94,7 +94,7 @@ describe('building page readability and activity actions', () => {
     expect(button(rows(w)[2].find('td'), 'Mark done')).toBeDefined()
     expect(rows(w)[2].findAll('td').at(-1).findAll('button').map(b => b.text())).toEqual(['⋯'])
     await menu(rows(w)[0])
-    expect(items(w).map(b => b.text())).toEqual(['Change actual date', 'Edit', 'Insert activity below', 'Delete'])
+    expect(items(w).map(b => b.text())).toEqual(['Change actual date', 'Edit', 'Add sub-activity', 'Insert activity below', 'Delete'])
     await items(w)[0].trigger('click')
     expect(w.findComponent({ name: 'RecordActualModal' }).props()).toMatchObject({ show: true, activity: { id: 1 } })
     expect(items(w)).toHaveLength(0)
@@ -136,6 +136,28 @@ describe('building page readability and activity actions', () => {
     expect(w.find('[data-test="floor-tag"]').exists()).toBe(false)
     await menu(rows(w)[0])
     expect(items(w).map(b => b.text()).join(' ')).not.toMatch(/floor/i)
+  })
+
+  it('shows each row bar and opens its sub-activities; with any, no Mark done of its own', async () => {
+    const withSubs = activities.map(a => (a.id === 3
+      ? { ...a, progress: 50, sub_activities: [{ id: 31, position: 1, work_id: 'T-003.1', name: 'Shuttering', progress: 50, planned_date: null, done_date: null, note: null }] }
+      : { ...a, progress: a.actualDate ? 100 : 0, sub_activities: [] }))
+    const w = render({ activities: withSubs })
+
+    expect(rows(w)[2].find('[data-test="progress-text"]').text()).toBe('50%')
+    expect(rows(w)[0].find('[data-test="progress-text"]').text()).toBe('100%')
+    // a break has no bar and no sub-activities
+    expect(rows(w)[3].find('[data-test="progress-bar"]').exists()).toBe(false)
+    expect(rows(w)[3].find('[data-test="toggle-subs"]').exists()).toBe(false)
+    // the NEXT row is done through its sub-activities
+    expect(button(rows(w)[2].find('td'), 'Mark done')).toBeUndefined()
+    await menu(rows(w)[2])
+    expect(items(w).map(b => b.text())).toEqual(['Edit', 'Add sub-activity', 'Insert activity below', 'Delete'])
+
+    expect(w.find('[data-test="sub-row"]').exists()).toBe(false)
+    await rows(w)[2].find('[data-test="toggle-subs"]').trigger('click')
+    expect(w.find('[data-test="sub-row"]').text()).toContain('T-003.1')
+    expect(rows(w)[2].find('[data-test="toggle-subs"]').attributes('aria-expanded')).toBe('true')
   })
 
   it('labels adjustments and ahead/behind in days without changing their figures', () => {

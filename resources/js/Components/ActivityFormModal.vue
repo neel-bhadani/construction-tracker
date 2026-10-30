@@ -34,6 +34,8 @@ const emit = defineEmits(['close'])
 
 const isEdit = computed(() => !!props.activity)
 const isInsert = computed(() => !isEdit.value && !!props.insertAfter)
+// with sub-activities its actual date is theirs to set, and it cannot be a break
+const subCount = computed(() => (isEdit.value ? props.activity.sub_activities?.length ?? 0 : 0))
 
 const form = useForm({
   description: '',
@@ -203,7 +205,7 @@ const submit = () => {
     description: data.description,
     predecessor_id: data.predecessor_id,
     planned_date: data.planned_date,
-    actual_date: data.is_break || !data.actual_date ? null : data.actual_date,
+    ...(subCount.value ? {} : { actual_date: data.is_break || !data.actual_date ? null : data.actual_date }),
     is_break: data.is_break,
     notes: data.notes,
     ...(isEdit.value ? { clear_adjustment: data.clear_adjustment } : {}),
@@ -253,14 +255,24 @@ const title = computed(() => (isEdit.value ? `Edit ${workId(props.activity)}${pr
         <p v-else-if="form.clear_adjustment" class="mt-1.5 text-xs text-slate-500">The adjustment will be cleared when you save.</p>
       </div>
 
-      <FormField v-if="!form.is_break" label="Actual date" hint="Leave empty until it is done." :error="form.errors.actual_date">
+      <div v-if="subCount" data-test="done-through-subs" class="text-sm">
+        <div class="mb-1 font-medium text-slate-700">Actual date</div>
+        <p class="text-slate-600">
+          Done through its {{ subCount }} sub-{{ subCount === 1 ? 'activity' : 'activities' }}:
+          <b class="text-slate-900">{{ activity.actualDate ? formatDate(activity.actualDate) : 'not done yet' }}</b>.
+          It is done once all are at 100%.
+        </p>
+      </div>
+      <FormField v-else-if="!form.is_break" label="Actual date" hint="Leave empty until it is done." :error="form.errors.actual_date">
         <input v-model="form.actual_date" type="date" :min="earliest" :max="today" />
       </FormField>
 
       <label class="flex items-center gap-2 text-sm text-slate-600">
-        <input v-model="form.is_break" type="checkbox" class="!min-h-0 !w-auto rounded" />
+        <input v-model="form.is_break" type="checkbox" class="!min-h-0 !w-auto rounded" :disabled="!!subCount" />
         This is a break (Diwali, Holi, festival)
       </label>
+      <p v-if="subCount" class="-mt-2 text-xs text-slate-500">An activity with sub-activities cannot be a break.</p>
+      <p v-if="form.errors.is_break" class="-mt-2 text-xs text-rose-700">{{ form.errors.is_break }}</p>
       <p v-if="form.is_break" class="-mt-2 text-xs text-slate-500">A break has no actual date.</p>
 
       <div v-if="!showNote">

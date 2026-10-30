@@ -8,6 +8,9 @@ import ActivityFormModal from './ActivityFormModal.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
 import RowMenu from './RowMenu.vue'
 import BuildingDatesModal from './BuildingDatesModal.vue'
+import SubActivityList from './SubActivityList.vue'
+import ProgressBar from './ProgressBar.vue'
+import SubActivityFormModal from './SubActivityFormModal.vue'
 import { formatDate, signed, percent, leadWord } from '@/lib/format'
 
 /*
@@ -16,6 +19,10 @@ import { formatDate, signed, percent, leadWord } from '@/lib/format'
  | output, passed through as it is). This lays the three per-row lists side by
  | side by id and formats them; it calculates nothing. The nav slot holds what
  | sits left of the buttons: the building tabs on a building's page.
+ |
+ | Each activity row has a progress bar (its sub-activities' average, from the
+ | server) and opens to show its sub-activities. With any, it is done through
+ | them: no Mark done of its own.
  */
 const props = defineProps({
   projectId: Number,
@@ -83,11 +90,30 @@ const confirmDelete = () => {
 
 const openDelete = row => { deleteError.value = ''; deleting.value = row }
 
+/* ---------------- sub-activities ---------------- */
+
+const hasSubs = row => !!row.sub_activities?.length
+const expanded = ref(new Set())
+const isOpen = row => expanded.value.has(row.id)
+const toggle = row => {
+  const next = new Set(expanded.value)
+  next.has(row.id) ? next.delete(row.id) : next.add(row.id)
+  expanded.value = next
+}
+const subForm = ref(null)        // { activity, sub }: sub null to add
+const addSub = row => {
+  if (!isOpen(row)) toggle(row)
+  subForm.value = { activity: row, sub: null }
+}
+// the row as the page has it now, so the dialog sees the latest sub-activities
+const subFormActivity = computed(() => subForm.value && rows.value.find(r => r.id === subForm.value.activity.id))
+
 const closeForm = () => { editing.value = null; inserting.value = null }
 
 const menuItems = row => [
-  ...(!row.is_break ? [{ label: row.actualDate ? 'Change actual date' : 'Mark done', action: () => { recording.value = row } }] : []),
+  ...(!row.is_break && !hasSubs(row) ? [{ label: row.actualDate ? 'Change actual date' : 'Mark done', action: () => { recording.value = row } }] : []),
   { label: 'Edit', action: () => { editing.value = row } },
+  ...(!row.is_break ? [{ label: 'Add sub-activity', action: () => addSub(row) }] : []),
   { label: 'Insert activity below', action: () => { inserting.value = row } },
   { label: 'Delete', action: () => openDelete(row), danger: true },
 ]
@@ -176,14 +202,28 @@ const menuItems = row => [
           <template v-for="(row, index) in shownRows" :key="row.id">
             <tr data-test="activity-row" class="border-b border-slate-200 last:border-0"
                 :class="row.is_break ? 'bg-slate-50 italic text-slate-500' : row.status === 'NEXT' ? 'bg-amber-50' : row.status === 'Done' ? 'bg-emerald-50/60' : ''">
-              <td class="px-4 py-2.5">
-                <div class="flex items-center justify-between gap-3">
-                  <div class="flex min-w-0 items-baseline gap-2">
-                    <span data-test="work-id" class="shrink-0 font-mono text-[13px] not-italic text-slate-500">{{ row.work_id }}</span>
-                    <button type="button" class="break-words text-left font-medium hover:text-teal-700 hover:underline"
-                            :class="row.is_break ? '' : 'text-slate-900'" @click="editing = row">{{ row.description }}</button>
+              <td class="py-2.5 pl-2 pr-4">
+                <div class="flex items-start gap-1">
+                  <button v-if="!row.is_break" type="button" data-test="toggle-subs"
+                          class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                          :aria-expanded="isOpen(row)" :aria-label="`${isOpen(row) ? 'Hide' : 'Show'} sub-activities of ${label(row)}`" @click="toggle(row)">
+                    <span class="inline-block transition-transform" :class="isOpen(row) ? 'rotate-90' : ''" aria-hidden="true">›</span>
+                  </button>
+                  <span v-else class="w-8 shrink-0" />
+                  <div class="min-w-0 flex-1">
+                    <div class="flex items-center justify-between gap-3">
+                      <div class="flex min-w-0 items-baseline gap-2 pt-1">
+                        <span data-test="work-id" class="shrink-0 font-mono text-[13px] not-italic text-slate-500">{{ row.work_id }}</span>
+                        <button type="button" class="break-words text-left font-medium hover:text-teal-700 hover:underline"
+                                :class="row.is_break ? '' : 'text-slate-900'" @click="editing = row">{{ row.description }}</button>
+                      </div>
+                      <button v-if="row.status === 'NEXT' && !row.is_break && !hasSubs(row)" class="btn shrink-0 !px-3" @click="recording = row">Mark done</button>
+                    </div>
+                    <div v-if="!row.is_break" class="mt-1.5 flex max-w-sm items-center gap-3 not-italic">
+                      <ProgressBar class="flex-1" :value="row.progress ?? 0" :label="`Progress of ${label(row)}`" />
+                      <span v-if="hasSubs(row)" class="whitespace-nowrap text-[13px] text-slate-500">{{ row.sub_activities.length }} sub</span>
+                    </div>
                   </div>
-                  <button v-if="row.status === 'NEXT' && !row.is_break" class="btn shrink-0 !px-3" @click="recording = row">Mark done</button>
                 </div>
               </td>
               <td class="whitespace-nowrap px-3 py-2.5">
@@ -200,6 +240,11 @@ const menuItems = row => [
               <td class="whitespace-nowrap px-3 py-2.5">{{ row.actualDate ? '' : formatDate(row.actualOrForecast) }}</td>
               <td class="whitespace-nowrap px-2 py-1 text-right">
                 <RowMenu :items="menuItems(row)" :label="`More for ${label(row)}`" button-class="btn-ghost !px-2.5 !py-1 !text-lg not-italic" />
+              </td>
+            </tr>
+            <tr v-if="isOpen(row)" data-test="sub-row" class="border-b border-slate-200 bg-slate-50">
+              <td colspan="7" class="py-3 pl-12 pr-4">
+                <SubActivityList :activity="row" :today="today" @add="addSub(row)" @edit="sub => (subForm = { activity: row, sub })" />
               </td>
             </tr>
             <tr v-if="index < shownRows.length - 1">
@@ -247,14 +292,28 @@ const menuItems = row => [
           </template>
           <dt class="text-slate-500">Status</dt>
           <dd><StatusChip :status="row.is_break ? 'Break' : row.status" /></dd>
+          <template v-if="!row.is_break">
+            <dt class="text-slate-500">Progress</dt>
+            <dd class="not-italic"><ProgressBar :value="row.progress ?? 0" :label="`Progress of ${label(row)}`" /></dd>
+          </template>
         </dl>
-        <button v-if="row.status === 'NEXT' && !row.is_break" class="btn mt-3 w-full" @click="recording = row">Mark done</button>
+        <button v-if="row.status === 'NEXT' && !row.is_break && !hasSubs(row)" class="btn mt-3 w-full" @click="recording = row">Mark done</button>
+        <template v-if="!row.is_break">
+          <button type="button" data-test="toggle-subs" class="mt-3 flex min-h-11 w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-3 font-semibold not-italic text-slate-700"
+                  :aria-expanded="isOpen(row)" @click="toggle(row)">
+            <span>Sub-activities ({{ row.sub_activities?.length ?? 0 }})</span>
+            <span class="inline-block transition-transform" :class="isOpen(row) ? 'rotate-90' : ''" aria-hidden="true">›</span>
+          </button>
+          <SubActivityList v-if="isOpen(row)" class="mt-3" :activity="row" :today="today" @add="addSub(row)" @edit="sub => (subForm = { activity: row, sub })" />
+        </template>
       </div>
     </div>
 
     <p v-if="!rows.length" class="card p-6 text-sm text-slate-500">{{ isCommon ? 'There are no common activities yet.' : 'This building has no activities yet.' }}</p>
     <p v-else-if="!shownRows.length" class="card p-6 text-sm text-slate-500">No activities match these filters.</p>
 
+    <SubActivityFormModal :show="!!subForm" :activity="subFormActivity" :sub="subForm?.sub ?? null" :today="today" :earliest="earliestActual"
+                          @close="subForm = null" />
     <RecordActualModal :show="!!recording" :activity="recording" :today="today" :earliest="earliestActual"
                        @close="recording = null" />
     <ActivityFormModal :show="!!editing || !!inserting" :building="building" :activity="editing?.id ? editing : null"

@@ -38,8 +38,11 @@ class ActivityRequest extends FormRequest
         return [
             'description' => ['required', 'string', 'max:255'],
             ...$this->chainRules(),
-            'is_break' => ['required', 'boolean'],
-            'actual_date' => [...$this->actualDateRules($this->building()), 'prohibited_if_accepted:is_break'],
+            // with sub-activities the actual date is theirs, and a break has none
+            'is_break' => ['required', 'boolean', ...($this->hasSubActivities() ? ['declined'] : [])],
+            'actual_date' => $this->hasSubActivities()
+                ? ['prohibited']
+                : [...$this->actualDateRules($this->building()), 'prohibited_if_accepted:is_break'],
             'notes' => ['nullable', 'string', 'max:5000'],
         ];
     }
@@ -53,6 +56,8 @@ class ActivityRequest extends FormRequest
             'description.required' => 'Enter the activity name.',
             ...$this->chainMessages(),
             ...$this->actualDateMessages($this->building()),
+            'is_break.declined' => 'An activity with sub-activities cannot be a break. Delete its sub-activities first.',
+            ...($this->hasSubActivities() ? ['actual_date.prohibited' => 'This activity is done through its sub-activities.'] : []),
         ];
     }
 
@@ -65,13 +70,18 @@ class ActivityRequest extends FormRequest
             ...$this->safe()->only(['description', 'notes']),
             ...$this->chain(),
             'is_break' => $this->boolean('is_break'),
-            'actual_date' => $this->validated('actual_date'),
+            ...($this->hasSubActivities() ? [] : ['actual_date' => $this->validated('actual_date')]),
         ];
     }
 
     protected function building(): Building
     {
         return $this->route('building') ?? $this->activity()->building;
+    }
+
+    private function hasSubActivities(): bool
+    {
+        return $this->activity()?->subActivities()->exists() ?? false;
     }
 
     protected function activity(): ?Activity

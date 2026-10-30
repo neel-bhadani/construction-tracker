@@ -50,6 +50,10 @@ class OwnershipTest extends TestCase
         'activities.destroy' => 'delete an activity',
         'activities.preview-new' => 'preview a new activity',
         'activities.preview-edit' => 'preview an edit',
+        'sub-activities.store' => 'add a sub-activity',
+        'sub-activities.order' => 'reorder sub-activities',
+        'sub-activities.update' => 'change a sub-activity',
+        'sub-activities.destroy' => 'delete a sub-activity',
     ];
 
     private User $stranger;
@@ -66,6 +70,8 @@ class OwnershipTest extends TestCase
 
     private int $leaf;
 
+    private int $sub;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -81,6 +87,8 @@ class OwnershipTest extends TestCase
         $this->root = DB::table('activities')->insertGetId([...$this->workId(), 'building_id' => $this->building->id, 'description' => 'Root', 'offset_days' => 10, 'planned_date' => '2026-04-05', 'sort_order' => 1]);
         $this->leaf = DB::table('activities')->insertGetId([...$this->workId(), 'building_id' => $this->building->id, 'description' => 'Leaf', 'predecessor_id' => $this->root, 'offset_days' => 5, 'planned_date' => '2026-04-05', 'sort_order' => 2]);
         app(ScheduleRecalculator::class)->recalculate($this->building);
+        $this->sub = DB::table('sub_activities')->insertGetId(['activity_id' => $this->leaf, 'work_number' => 1, 'work_id' => 'T-1002.1', 'position' => 1, 'name' => 'Shuttering']);
+        DB::table('activities')->where('id', $this->leaf)->update(['next_sub_number' => 1]);
 
         // the other account has data of its own, with the same names
         $this->stranger = User::factory()->create(['name' => 'Someone Else']);
@@ -206,6 +214,10 @@ class OwnershipTest extends TestCase
             'activities.destroy' => ['delete', "/activities/{$this->leaf}", []],
             'activities.preview-new' => ['post', "/buildings/{$b}/activities/preview", $this->chain()],
             'activities.preview-edit' => ['post', "/activities/{$this->leaf}/preview", $this->chain()],
+            'sub-activities.store' => ['post', "/activities/{$this->leaf}/sub-activities", ['name' => 'Rebar']],
+            'sub-activities.order' => ['patch', "/activities/{$this->leaf}/sub-activities/order", ['ids' => [$this->sub]]],
+            'sub-activities.update' => ['patch', "/sub-activities/{$this->sub}", ['progress' => 50]],
+            'sub-activities.destroy' => ['delete', "/sub-activities/{$this->sub}", []],
         };
 
         if ($user !== null) {
@@ -245,6 +257,8 @@ class OwnershipTest extends TestCase
             'project_revisions' => $rows('project_revisions'),
             'building_revisions' => $rows('building_revisions'),
             'activity_revisions' => $rows('activity_revisions'),
+            'sub_activities' => $rows('sub_activities'),
+            'sub_activity_revisions' => $rows('sub_activity_revisions'),
         ];
     }
 }

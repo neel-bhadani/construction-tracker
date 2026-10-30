@@ -11,6 +11,7 @@ use App\Models\Building;
 use App\Models\BuildingRevision;
 use App\Models\Project;
 use App\Models\ProjectRevision;
+use App\Models\SubActivity;
 use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
@@ -215,11 +216,14 @@ class ProjectEditor
     }
 
     /**
+     * Each activity's sub-activities come along as names and planned dates, at 0%.
+     *
      * @return array<int, array<string, mixed>>
      */
     private function copiedPlan(Building $source): array
     {
-        return Activity::where('building_id', $source->id)->orderBy('sort_order')->orderBy('id')->get()
+        return Activity::where('building_id', $source->id)->with('subActivities:id,activity_id,name,planned_date,position')
+            ->orderBy('sort_order')->orderBy('id')->get()
             ->mapWithKeys(fn (Activity $activity) => [$activity->id => [
                 'description' => $activity->description,
                 'predecessor' => $activity->predecessor_id,
@@ -228,6 +232,10 @@ class ProjectEditor
                 'adjustment_reason' => $activity->adjustment_reason,
                 'is_break' => $activity->is_break,
                 'sort_order' => $activity->sort_order,
+                'sub_activities' => $activity->subActivities->map(fn (SubActivity $sub) => [
+                    'name' => $sub->name,
+                    'planned_date' => $sub->planned_date?->toDateString(),
+                ])->all(),
             ]])
             ->all();
     }
